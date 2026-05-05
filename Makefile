@@ -20,14 +20,16 @@ quickstart:
 		echo "→ .env created from .env.example"; \
 		SECRET=$$(openssl rand -hex 32); \
 		JWT=$$(openssl rand -hex 32); \
+		PGPASS=$$(openssl rand -hex 16); \
 		sed -i.bak "s/change-me-in-production/$$SECRET/" .env; \
 		sed -i.bak "s/change-me-jwt-secret-in-production/$$JWT/" .env; \
+		sed -i.bak "s/^POSTGRES_PASSWORD=$$/POSTGRES_PASSWORD=$$PGPASS/" .env; \
 		rm -f .env.bak; \
-		echo "→ SECRET_KEY and JWT_SECRET_KEY generated"; \
+		echo "→ SECRET_KEY, JWT_SECRET_KEY and POSTGRES_PASSWORD generated"; \
 		echo ""; \
 		echo "  Edit .env and set:"; \
-		echo "    ANTHROPIC_API_KEY   (or set LLM_PROVIDER=ollama for local LLM)"; \
-		echo "    AUTH_PASSWORD_HASH  (run: make hash PASSWORD=yourpassword)"; \
+		echo "    LLM_PROVIDER + LLM_API_KEY  (or set LLM_PROVIDER=ollama for local LLM)"; \
+		echo "    AUTH_PASSWORD_HASH          (run: make hash PASSWORD=yourpassword)"; \
 		echo ""; \
 	fi
 	docker compose up -d

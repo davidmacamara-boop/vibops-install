@@ -95,8 +95,8 @@ agent:
     accessMode: ReadWriteOnce    # ReadWriteMany si plusieurs replicas (EFS)
 
   env:
-    # LLM provider: anthropic (default) | openai (on-prem: vLLM, GLM, Mistral…) | ollama
-    LLM_PROVIDER: "anthropic"
+    # LLM provider: claude (default) | openai (on-prem: vLLM, Mistral…) | ollama
+    LLM_PROVIDER: "claude"
     # Model name — interpreted by the active provider
     # anthropic: claude-sonnet-4-6  |  openai/ollama: glm-4, mistral-7b, llama3…
     LLM_MODEL: "claude-sonnet-4-6"
@@ -107,12 +107,15 @@ agent:
     OLLAMA_BASE_URL: "http://ollama:11434"
 
   secret:
-    # Anthropic API key — required only when LLM_PROVIDER=anthropic.
-    # Anthropic usage costs are billed directly to the client's Anthropic account.
-    # VibOps licence fees are invoiced separately.
-    # Leave empty when using an on-prem LLM (LLM_PROVIDER=openai or ollama).
-    # Get a key at: https://console.anthropic.com/settings/keys
-    anthropicApiKey: ""
+    # API key for the active LLM provider.
+    # - claude (Anthropic): get a key at https://console.anthropic.com/settings/keys
+    # - openai / on-prem: your provider's API key (leave empty if no auth required)
+    # - ollama: leave empty
+    llmApiKey: ""
+    # Base URL — required only when LLM_PROVIDER=openai (on-prem endpoint).
+    # Example: http://vllm-service.ai-infra.svc:8000/v1
+    # Leave empty for claude or ollama.
+    llmBaseUrl: ""
     jwtSecretKey: "change-me-jwt-secret"
 
 # ── Console (UI) ──────────────────────────────────────────────────────────────
@@ -149,7 +152,7 @@ postgresql:
   enabled: true
   auth:
     username: vibops
-    password: vibops
+    password: ""   # REQUIRED — set via --set postgresql.auth.password=<strong-password>
     database: vibops
   primary:
     resources:
