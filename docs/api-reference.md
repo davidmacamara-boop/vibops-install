@@ -1,0 +1,681 @@
+# VibOps — API Reference
+
+_Last updated: 2026-05-03 · v0.15.0-sprint15_
+
+This document covers the **key endpoints** for integration and technical qualification. It is
+organized by functional domain, with curl examples for each operation.
+
+**Interactive reference (Swagger UI):** `https://<host>/docs`  
+**Machine-readable spec:** `docs/openapi.json` (OpenAPI 3.1 — 132 endpoints, auto-generated)  
+**Full redoc:** `https://<host>/redoc`
+
+---
+
+## Authentication
+
+All protected endpoints require `Authorization: Bearer <token>` in the request header.
+The token is a JWT enriched with `org_id`, `teams`, `role`, and `scope`.
+
+### `POST /api/v1/auth/login`
+
+Authenticates a user and returns an access token + refresh token.
+
+```bash
+curl -s -X POST https://<host>/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "secret"}' | jq .
+```
+
+Response:
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer"
+}
+```
+
+### `POST /api/v1/auth/refresh`
+
+Exchanges a refresh token (7-day validity) for a new access token.
+
+```bash
+curl -s -X POST https://<host>/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "eyJ..."}'
+```
+
+### `GET /api/v1/auth/me`
+
+Returns the `UserContext` associated with the current token (org_id, role, teams, scope).
+
+```bash
+curl -s https://<host>/api/v1/auth/me \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### `PATCH /api/v1/me/password`
+
+Allows the authenticated user to change their own password.
+
+```bash
+curl -s -X PATCH https://<host>/api/v1/me/password \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"current_password": "old", "new_password": "new"}'
+```
+
+---
+
+## Health
+
+### `GET /api/v1/health/live`
+
+Liveness probe — no I/O, always 200 if the process is up. Used by Kubernetes.
+
+```bash
+curl -s https://<host>/api/v1/health/live
+```
+
+### `GET /api/v1/health`
+
+Deep health — checks DB and Redis. Returns 200 if all dependencies are up, 503 otherwise.
+
+```bash
+curl -s https://<host>/api/v1/health | jq .
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "db": "ok",
+  "redis": "ok"
+}
+```
+
+---
+
+## Jobs
+
+Jobs are the **core execution primitive**. Every infrastructure action (scale, deploy, delete…)
+creates a job. All jobs are org-scoped, audited, and policy-checked.
+
+**Job lifecycle:** `pending` → `running` → `success` | `failed` | `cancelled`
+
+### `POST /api/v1/jobs`
+
+Creates a job. Passes through 4 guards: auth, rate limiter, PolicyEngine, GPU quota.
+
+Destructive actions (`scale_cluster`, `delete_deployment`, `helm_uninstall`…) return 409 with a
+dry-run preview unless `confirmed: true` is present. The `confirmed` flag can only be injected
+by the `confirm_action` agent tool — it is stripped from direct API calls.
+
+```bash
+# Non-destructive: list cluster deployments
+curl -s -X POST https://<host>/api/v1/jobs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "get_cluster_deployments",
+    "payload": {"cluster_name": "prod-cluster"},
+    "gateway_id": "gw-abc123"
+  }' | jq .
+```
+
+```bash
+# Destructive: dry-run preview (confirmed omitted → 409)
+curl -s -X POST https://<host>/api/v1/jobs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "scale_cluster",
+    "payload": {"cluster_name": "prod-cluster", "node_group": "gpu-pool", "desired_count": 0},
+    "gateway_id": "gw-abc123"
+  }'
+# → 409: {requires_confirmation: true, preview: "...", reversibility: "reversible", resolved_params: {...}}
+```
+
+Response `201`:
+```json
+{
+  "id": "3fa8e1b2-...",
+  "action": "get_cluster_deployments",
+  "status": "pending",
+  "org_id": "org-xyz",
+  "triggered_by": "user:admin",
+  "created_at": "2026-05-01T10:00:00Z"
+}
+```
+
+### `GET /api/v1/jobs`
+
+Lists jobs for the current org. Filterable by `status`, `action`, `triggered_by`, `gateway_id`.
+
+```bash
+curl -s "https://<host>/api/v1/jobs?status=failed&limit=20" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### `GET /api/v1/jobs/{job_id}`
+
+Returns a job by full UUID or short ID (first 8 chars). Includes `result` once completed.
+
+```bash
+curl -s https://<host>/api/v1/jobs/3fa8e1b2 \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Response (completed):
+```json
+{
+  "id": "3fa8e1b2-...",
+  "status": "success",
+  "result": {
+    "returncode": 0,
+    "stdout": "...",
+    "execution_time_ms": 342
+  }
+}
+```
+
+### `GET /api/v1/jobs/{job_id}/logs/stream`
+
+SSE stream of job logs in real time. Terminates when the job reaches a terminal state.
+
+```bash
+curl -s -N https://<host>/api/v1/jobs/3fa8e1b2/logs/stream \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### `POST /api/v1/jobs/{job_id}/cancel`
+
+Cancels a `pending` or `running` job. The worker finishes its current iteration then stops.
+
+```bash
+curl -s -X POST https://<host>/api/v1/jobs/3fa8e1b2/cancel \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Pipelines
+
+Pipelines are ordered sequences of jobs. Steps execute sequentially — if one fails, the pipeline
+stops. Each step is policy-checked at creation time; at execution time only `unknown_action` is
+re-checked (system jobs are pre-authorized).
+
+### `POST /api/v1/pipelines`
+
+Creates and queues a pipeline.
+
+```bash
+curl -s -X POST https://<host>/api/v1/pipelines \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "deploy-llama3-prod",
+    "steps": [
+      {"action": "helm_upgrade", "payload": {"release": "llama3", "namespace": "staging"}, "gateway_id": "gw-abc123"},
+      {"action": "get_cluster_deployments", "payload": {"cluster_name": "prod-cluster"}, "gateway_id": "gw-abc123"},
+      {"action": "helm_upgrade", "payload": {"release": "llama3", "namespace": "prod"}, "gateway_id": "gw-abc123"}
+    ],
+    "on_failure": "rollback"
+  }' | jq .
+```
+
+`on_failure` values: `stop` (default) | `rollback` | `continue`
+
+### `GET /api/v1/pipelines`
+
+Lists pipelines for the current org (paginated).
+
+```bash
+curl -s "https://<host>/api/v1/pipelines?limit=10" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### `GET /api/v1/pipelines/{pipeline_id}`
+
+Returns a pipeline with its step results.
+
+### `POST /api/v1/pipelines/{pipeline_id}/trigger`
+
+Triggers an existing pipeline immediately. Returns `202 Accepted`.
+
+```bash
+curl -s -X POST https://<host>/api/v1/pipelines/uuid-here/trigger \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Gateways
+
+Gateways (VibOps Connect) are edge agents deployed in the customer's infrastructure. They bridge
+Core to local Kubernetes clusters, cloud APIs, and AI connectors.
+
+### `GET /api/v1/gateways`
+
+Lists registered gateways and their last ping timestamp.
+
+```bash
+curl -s https://<host>/api/v1/gateways \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Response:
+```json
+[
+  {
+    "id": "gw-abc123",
+    "name": "prod-vpc",
+    "status": "online",
+    "last_ping": "2026-05-01T09:58:00Z",
+    "version": "0.13.0"
+  }
+]
+```
+
+### `POST /api/v1/gateways`
+
+Registers a new gateway. Returns the bearer token (shown **once** — store it immediately).
+
+```bash
+curl -s -X POST https://<host>/api/v1/gateways \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "prod-vpc", "description": "Production VPC gateway"}' | jq .
+```
+
+Response:
+```json
+{
+  "id": "gw-abc123",
+  "name": "prod-vpc",
+  "token": "gw-tk-xxxxxxxxxxxxxxxx"
+}
+```
+
+### `DELETE /api/v1/gateways/{gateway_id}`
+
+Revokes a gateway token. The gateway will no longer be able to poll for jobs.
+
+---
+
+## Webhooks
+
+Webhook endpoints receive external events and translate them into VibOps jobs.
+
+### `POST /api/v1/webhooks/github`
+
+Receives a GitHub push or release event. If a subscription matches `repo + branch`, creates a job.
+Authenticated via HMAC-SHA256 (`X-Hub-Signature-256` header).
+
+```bash
+# GitHub sends this automatically — configure in repo Settings → Webhooks
+# URL: https://<host>/api/v1/webhooks/github
+# Content-Type: application/json
+# Secret: value of GITHUB_WEBHOOK_SECRET env var
+```
+
+### `POST /api/v1/webhooks/grafana`
+
+Receives a Grafana Alertmanager alert payload. For each firing alert with a known action, creates
+a VibOps job. Authenticated via `Authorization: Bearer <GRAFANA_WEBHOOK_SECRET>`.
+
+```bash
+# Configure in Grafana: Alerting → Contact points → Webhook
+# URL: https://<host>/api/v1/webhooks/grafana
+# Authorization header: Bearer <secret>
+```
+
+### `GET /api/v1/webhooks/subscriptions`
+
+Lists the current org's GitHub webhook subscriptions.
+
+### `POST /api/v1/webhooks/subscriptions`
+
+Registers a repo → action subscription.
+
+```bash
+curl -s -X POST https://<host>/api/v1/webhooks/subscriptions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repo": "acme/ml-models",
+    "branch": "main",
+    "event": "push",
+    "action": "helm_upgrade",
+    "payload": {"release": "llama3", "namespace": "prod"},
+    "gateway_id": "gw-abc123"
+  }'
+```
+
+### `DELETE /api/v1/webhooks/subscriptions/{sub_id}`
+
+Deletes a subscription.
+
+---
+
+## Triggers
+
+Triggers are persistent rules that fire jobs on a schedule (cron) or on metric threshold events.
+
+### `POST /api/v1/triggers`
+
+Creates a trigger rule.
+
+```bash
+# Cron-based: scale down GPUs every night at 22:00
+curl -s -X POST https://<host>/api/v1/triggers \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "nightly-scale-down",
+    "type": "cron",
+    "schedule": "0 22 * * *",
+    "action": "scale_cluster",
+    "payload": {"cluster_name": "prod-cluster", "node_group": "gpu-pool", "desired_count": 0},
+    "gateway_id": "gw-abc123"
+  }'
+```
+
+### `GET /api/v1/triggers`
+
+Lists triggers. Use `?enabled_only=true` to filter.
+
+### `POST /api/v1/triggers/{rule_id}/enable` / `/disable`
+
+Enables or disables a rule without deleting it.
+
+### `DELETE /api/v1/triggers/{rule_id}`
+
+Permanently deletes a trigger rule.
+
+---
+
+## Memories
+
+The agent's persistent memory store. Used across conversations to retain cluster-specific facts,
+preferences, and operational context. Scoped to the organization.
+
+### `POST /api/v1/memories`
+
+Creates or updates a memory (upsert by `org_id + key`).
+
+```bash
+curl -s -X POST https://<host>/api/v1/memories \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "key": "prod_cluster_owner",
+    "value": "infra-team",
+    "type": "fact",
+    "description": "Primary responsible team for the prod cluster"
+  }'
+```
+
+`type` values: `app` | `preference` | `fact` | `action`
+
+### `GET /api/v1/memories`
+
+Lists the org's memories. Filter by type: `?type=fact`
+
+### `GET /api/v1/memories/search?q=<query>`
+
+Full-text search over memory keys and descriptions.
+
+```bash
+curl -s "https://<host>/api/v1/memories/search?q=gpu+quota" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### `GET /api/v1/memories/{key}`
+
+Retrieves a memory by exact key.
+
+### `DELETE /api/v1/memories/{key}`
+
+Permanently deletes a memory.
+
+---
+
+## Secrets (Vault)
+
+Secrets are encrypted at rest with Fernet (`SECRET_KEY`). Values are never returned on list
+operations — only via explicit `GET /api/v1/secrets/{name}`.
+
+### `POST /api/v1/secrets`
+
+Encrypts and stores a secret.
+
+```bash
+curl -s -X POST https://<host>/api/v1/secrets \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "prod_kubeconfig", "value": "base64-encoded-kubeconfig"}'
+```
+
+### `GET /api/v1/secrets`
+
+Lists secret names (no values exposed).
+
+### `GET /api/v1/secrets/{name}`
+
+Returns a secret with its decrypted value. Checks org vault first, then global vault.
+
+### `DELETE /api/v1/secrets/{name}`
+
+Deletes a secret from the org vault.
+
+---
+
+## Discovery
+
+Discovery scans the connected infrastructure and builds a resource inventory.
+
+### `POST /api/v1/discovery/run`
+
+Launches a background scan. Returns immediately with a `job_id`.
+
+```bash
+curl -s -X POST https://<host>/api/v1/discovery/run \
+  -H "Authorization: Bearer $TOKEN" | jq .
+# → {"job_id": "3fa8e1b2-..."}
+# Poll GET /api/v1/jobs/3fa8e1b2 to track progress
+```
+
+### `GET /api/v1/discovery/last`
+
+Returns the result of the last successfully completed discovery — cluster topology, deployments,
+GPU counts, Prometheus presence.
+
+---
+
+## Audit
+
+The audit log records every job (success and denied), the matched policy rule, and the outcome.
+
+### `GET /api/v1/audit`
+
+Lists the audit log for the current org (paginated, filterable).
+
+```bash
+curl -s "https://<host>/api/v1/audit?limit=50&action=scale_cluster" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Fields per entry: `job_id`, `action`, `outcome` (`allowed`|`denied`), `matched_rule`, `reason`,
+`triggered_by`, `org_id`, `created_at`.
+
+---
+
+## Licence
+
+### `GET /api/v1/licence`
+
+Returns the current licence status: plan, expiry, usage vs limits.
+
+```bash
+curl -s https://<host>/api/v1/licence \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Response:
+```json
+{
+  "plan": "enterprise",
+  "valid": true,
+  "expires_at": "2027-04-22",
+  "days_remaining": 365,
+  "limits": {
+    "users_max": 50,
+    "clusters_max": 10,
+    "gpu_max": 128
+  },
+  "usage": {
+    "users_current": 12,
+    "clusters_current": 3,
+    "gpu_current": 32
+  }
+}
+```
+
+### `POST /api/v1/licence`
+
+Applies a new licence key (RS256 JWT signed by VibOps vendor key).
+
+```bash
+curl -s -X POST https://<host>/api/v1/licence \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"licence_key": "eyJ..."}'
+```
+
+---
+
+## Observability
+
+### `GET /api/v1/metrics/gpu`
+
+Returns live GPU metrics (utilisation, memory, temperature, error counts) aggregated across
+all connected gateways.
+
+```bash
+curl -s https://<host>/api/v1/metrics/gpu \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### `GET /api/v1/metrics/workload`
+
+Returns workload metrics (request rate, latency, replica counts per deployment).
+
+### `GET /api/v1/metrics/cost`
+
+Returns cost metrics (estimated hourly/daily GPU spend per cluster).
+
+### `GET /api/v1/metrics/mttr`
+
+Returns mean time to recovery metrics from the incident history.
+
+---
+
+## Admin — Org, Teams, Users, Tokens
+
+These endpoints require `admin` role or `org_admin` scope.
+
+### Organisation
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/admin/org` | Create an organisation |
+| `GET`  | `/api/v1/admin/org` | Get the current org details |
+
+### Teams
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`  | `/api/v1/admin/teams` | List teams |
+| `POST` | `/api/v1/admin/teams` | Create a team (with optional scope: namespaces, clusters, actions) |
+| `PATCH`| `/api/v1/admin/teams/{team_id}/scope` | Update a team's scope |
+| `DELETE`| `/api/v1/admin/teams/{team_id}` | Delete a team |
+| `POST` | `/api/v1/admin/teams/{team_id}/members` | Add a member |
+| `DELETE`| `/api/v1/admin/teams/{team_id}/members/{user_id}` | Remove a member |
+
+### Users
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`  | `/api/v1/admin/users` | List org users |
+| `POST` | `/api/v1/admin/users` | Create a user (enforces `users_max` licence limit) |
+| `PATCH`| `/api/v1/admin/users/{user_id}` | Update user role or status |
+
+### Cluster Role Assignments
+
+Per-cluster role overrides — grant a different role to a user on a specific cluster, independent of their team membership. Requires `org_admin`.
+
+Resolution order: explicit cluster assignment → team-level role.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`    | `/api/v1/orgs/{org_id}/cluster-roles` | List all cluster role assignments in the org |
+| `GET`    | `/api/v1/orgs/{org_id}/users/{user_id}/cluster-roles` | List assignments for a specific user |
+| `PUT`    | `/api/v1/orgs/{org_id}/users/{user_id}/cluster-roles/{cluster_name}` | Create or update assignment (idempotent) |
+| `DELETE` | `/api/v1/orgs/{org_id}/users/{user_id}/cluster-roles/{cluster_name}` | Remove assignment (user reverts to team role) |
+
+**Body for `PUT`:** `{"role": "readonly" | "developer" | "admin"}`
+
+**Example — readonly on prod, developer on dev:**
+```bash
+# Lock alice to readonly on prod
+PUT /api/v1/orgs/{org_id}/users/{alice_id}/cluster-roles/prod
+{"role": "readonly"}
+
+# Give alice developer access on dev
+PUT /api/v1/orgs/{org_id}/users/{alice_id}/cluster-roles/dev
+{"role": "developer"}
+```
+
+### API Tokens
+
+Service accounts for the agent and external integrations.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`  | `/api/v1/admin/tokens` | List API tokens |
+| `POST` | `/api/v1/admin/tokens` | Create a token (returns the token value once) |
+| `DELETE`| `/api/v1/admin/tokens/{token_id}` | Revoke a token |
+
+---
+
+## Error codes
+
+| Code | Meaning |
+|------|---------|
+| `400` | Validation error — check request body |
+| `401` | Missing or invalid JWT |
+| `403` | Action not in `TOOL_CATALOG`, or insufficient role |
+| `404` | Resource not found (or not owned by this org) |
+| `409` | Destructive action requires confirmation — response includes `preview` and `resolved_params` |
+| `429` | Rate limit exceeded (60 requests / 60 seconds / org) |
+| `503` | Core dependency down (DB or Redis) — see `GET /api/v1/health` |
+
+---
+
+## Rate limiting
+
+60 requests per 60-second sliding window per organisation. Tracked in Redis (ZSET + Lua script).
+The limit applies per org, not per user — a single user cannot exhaust another org's quota.
+
+---
+
+## Related documents
+
+| Document | Purpose |
+|----------|---------|
+| `docs/openapi.json` | Full OpenAPI 3.1 spec (machine-readable, 132 endpoints) |
+| `https://<host>/docs` | Swagger UI — interactive, testable |
+| `docs/technical-architecture.md` | Customer-facing architecture document (DAT) |
+| `docs/architecture/security.md` | Auth layers, PolicyEngine, threat model |
+| `docs/architecture/overview.md` | System diagram, action flows, trust boundaries |

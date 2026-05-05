@@ -1,0 +1,73 @@
+# VibOps — Values de production
+# Usage : helm install vibops ./helm/vibops -f values.production.yaml -f my-secrets.yaml
+#
+# Créer un fichier my-secrets.yaml (NE PAS commiter) avec :
+#   core:
+#     secret:
+#       jwtSecretKey: "..."
+#       authPasswordHash: "..."
+#       vaultKey: "..."
+#   agent:
+#     secret:
+#       anthropicApiKey: "sk-ant-..."
+
+# ── Replicas & Resources ──────────────────────────────────────────────────────
+core:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "1Gi"
+  env:
+    DATABASE_URL: "postgresql+asyncpg://vibops:CHANGE_ME@your-db-host:5432/vibops"
+    REDIS_URL: "redis://your-redis-host:6379/0"
+    APP_ENV: "production"
+    JWT_EXPIRE_HOURS: "2"
+    CORS_ORIGINS: "https://vibops.yourcompany.com"
+
+agent:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "1Gi"
+
+console:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+# ── PostgreSQL externe ────────────────────────────────────────────────────────
+# Utiliser une DB managée en prod (RDS, CloudSQL, etc.)
+postgresql:
+  enabled: false   # désactive le sub-chart Bitnami
+
+# ── Ingress + TLS ─────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx          # ou alb, traefik, etc.
+  host: vibops.yourcompany.com
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+  tls:
+    - secretName: vibops-tls
+      hosts:
+        - vibops.yourcompany.com
+
+# ── Service Account ───────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  annotations: {}   # IRSA / Workload Identity si AWS/GCP

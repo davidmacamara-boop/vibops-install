@@ -1,0 +1,201 @@
+# VibOps Helm Chart — values par défaut
+# Surcharger avec: helm install vibops ./helm/vibops -f my-values.yaml
+
+global:
+  imageRegistry: ""          # ex: registry.mycompany.com
+  imagePullSecrets: []
+
+# ── Registry credentials (private OCI registry) ───────────────────────────────
+# Creates a kubernetes.io/dockerconfigjson Secret and injects it as imagePullSecret
+imageCredentials:
+  enabled: true
+  registry: ghcr.io
+  username: vibops-deploy    # pull-only service account
+  password: ""               # set in values.secret.yaml (SOPS-encrypted)
+
+# ── Images ────────────────────────────────────────────────────────────────────
+images:
+  core:
+    repository: ghcr.io/vibops/core
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  agent:
+    repository: ghcr.io/vibops/agent
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  console:
+    repository: ghcr.io/vibops/console
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+# ── Namespace ─────────────────────────────────────────────────────────────────
+namespaceOverride: ""   # défaut: release namespace
+
+# ── Core (Execution Engine) ───────────────────────────────────────────────────
+core:
+  enabled: true
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1"
+      memory: "512Mi"
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  env:
+    APP_ENV: production
+    OTEL_EXPORTER_OTLP_ENDPOINT: ""   # ex: http://otel-collector:4317
+    # Surcharger les secrets via core.secret.*
+
+  secret:
+    secretKey: "change-me-in-production"
+    jwtSecretKey: "change-me-jwt-secret"
+    authUsername: "admin"
+    authPasswordHash: ""   # vide = auth désactivée
+    databaseUrl: ""        # auto-généré si postgresql.enabled
+    # Licence VibOps — laisser vide pour trial 14 jours
+    # Obtenir une clé : contacter sales@vibops.io
+    # La clé est un JWT RS256 signé par VibOps. Aucun secret partagé requis côté client.
+    licenceKey: ""
+
+  # Kubeconfig multi-cluster — monté dans le pod core pour le sélecteur de contexte
+  # Créer le secret avec : kubectl create secret generic vibops-kubeconfig \
+  #   --from-file=config=$HOME/.kube/config -n vibops
+  kubeconfig:
+    secretName: ""          # nom du secret K8s contenant la clé "config"
+    mountPath: /root/.kube  # chemin de montage dans le pod
+
+# ── Agent ─────────────────────────────────────────────────────────────────────
+agent:
+  enabled: true
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1"
+      memory: "512Mi"
+
+  service:
+    type: ClusterIP
+    port: 8001
+
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: standard   # remplacer par efs-sc (AWS) ou nfs-client (GCP)
+    accessMode: ReadWriteOnce    # ReadWriteMany si plusieurs replicas (EFS)
+
+  env:
+    # LLM provider: anthropic (default) | openai (on-prem: vLLM, GLM, Mistral…) | ollama
+    LLM_PROVIDER: "anthropic"
+    # Model name — interpreted by the active provider
+    # anthropic: claude-sonnet-4-6  |  openai/ollama: glm-4, mistral-7b, llama3…
+    LLM_MODEL: "claude-sonnet-4-6"
+    # On-prem OpenAI-compatible endpoint (required when LLM_PROVIDER=openai)
+    OPENAI_BASE_URL: ""   # e.g. http://glm-service.ai-infra.svc:8000/v1
+    OPENAI_API_KEY: ""    # leave empty for on-prem endpoints with no auth
+    # Ollama endpoint (required when LLM_PROVIDER=ollama)
+    OLLAMA_BASE_URL: "http://ollama:11434"
+
+  secret:
+    # Anthropic API key — required only when LLM_PROVIDER=anthropic.
+    # Anthropic usage costs are billed directly to the client's Anthropic account.
+    # VibOps licence fees are invoiced separately.
+    # Leave empty when using an on-prem LLM (LLM_PROVIDER=openai or ollama).
+    # Get a key at: https://console.anthropic.com/settings/keys
+    anthropicApiKey: ""
+    jwtSecretKey: "change-me-jwt-secret"
+
+# ── Console (UI) ──────────────────────────────────────────────────────────────
+console:
+  enabled: true
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  host: vibops.example.com
+  tls: []
+  # tls:
+  #   - secretName: vibops-tls
+  #     hosts:
+  #       - vibops.example.com
+
+# ── PostgreSQL (Bitnami sub-chart) ────────────────────────────────────────────
+postgresql:
+  enabled: true
+  auth:
+    username: vibops
+    password: vibops
+    database: vibops
+  primary:
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "512Mi"
+
+# ── HPA (désactivé par défaut — activer avec values.ha.yaml) ─────────────────
+autoscaling:
+  enabled: false
+  core:
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  agent:
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 60
+
+# ── PodDisruptionBudget (désactivé par défaut) ────────────────────────────────
+podDisruptionBudget:
+  enabled: false
+  core:
+    minAvailable: 1
+  agent:
+    minAvailable: 1
+  console:
+    minAvailable: 1
+
+# ── Prometheus ServiceMonitor (nécessite prometheus-operator) ────────────────
+serviceMonitor:
+  enabled: false          # activer si kube-prometheus-stack est installé
+  interval: "30s"
+  path: /metrics          # exposé par prometheus-fastapi-instrumentator
+
+# ── Grafana Dashboard (nécessite kube-prometheus-stack + sidecar dashboards) ─
+grafanaDashboard:
+  enabled: false          # activer si grafana sidecar est configuré (label grafana_dashboard: "1")
+  namespace: ""           # défaut: même namespace que la release (ou "monitoring" si Grafana est ailleurs)
+
+# ── ServiceAccount ────────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}

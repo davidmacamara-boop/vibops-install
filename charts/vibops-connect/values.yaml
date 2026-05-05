@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# VibOps Connect — values.yaml
+# Helm chart pour le déploiement de l'agent connecteur sur le cluster CSP client.
+# ─────────────────────────────────────────────────────────────────────────────
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+image:
+  repository: ghcr.io/davidmacamara-boop/vibops-connect
+  tag: "0.10.0"
+  pullPolicy: IfNotPresent
+
+# ── Identité du gateway ────────────────────────────────────────────────────────
+gateway:
+  # Nom unique du gateway (affiché dans VibOps, ex: "client-acme-prod")
+  name: ""
+  # Cluster associé (ex: "gpu-cluster-west")
+  cluster: ""
+  # Organisation (identifiant unique fourni par VibOps)
+  orgId: ""
+
+# ── Connexion à l'API VibOps centrale ─────────────────────────────────────────
+vibops:
+  # URL de l'API core VibOps (ex: https://vibops.example.com)
+  coreUrl: ""
+  # Token d'authentification (généré depuis la console VibOps)
+  token: ""
+  # Nom d'un Secret existant contenant la clé "token"
+  existingSecret: ""
+
+# ── Accès Kubernetes local ────────────────────────────────────────────────────
+kubeconfig:
+  # Secret contenant le kubeconfig local (clé "config")
+  # Si vide, utilise le ServiceAccount in-cluster
+  secretName: ""
+  mountPath: "/root/.kube"
+
+# ── Prometheus local ───────────────────────────────────────────────────────────
+prometheus:
+  url: "http://prometheus-operated:9090"
+
+# ── Ressources ────────────────────────────────────────────────────────────────
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+# ── ServiceAccount ─────────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ── RBAC — accès cluster pour kubectl/metrics ─────────────────────────────────
+rbac:
+  create: true
+  # Droits étendus (lecture pods, nodes, deployments, metrics)
+  clusterRole: true
+
+env: {}

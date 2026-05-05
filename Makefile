@@ -1,0 +1,135 @@
+# VibOps — Makefile
+# Usage:
+#   make quickstart                   # first-time setup: copy .env, generate secrets, start stack
+#   make up                           # start the full stack
+#   make down                         # stop the stack
+#   make check                        # verify the stack is healthy
+#   make logs SERVICE=core            # tail logs for a service
+#   make pilot-create-client ORG=acme EMAIL=admin@acme.com PASSWORD=s3cr3t
+#   make pilot-create-client ORG=acme EMAIL=admin@acme.com PASSWORD=s3cr3t BUDGET=5000
+
+.PHONY: up down logs quickstart check pilot-create-client backup-now backup-list help
+
+# ── Stack ──────────────────────────────────────────────────────────────────────
+
+quickstart:
+	@if [ -f .env ]; then \
+		echo "→ .env already exists — skipping copy. Edit it manually if needed."; \
+	else \
+		cp .env.example .env; \
+		echo "→ .env created from .env.example"; \
+		SECRET=$$(openssl rand -hex 32); \
+		JWT=$$(openssl rand -hex 32); \
+		sed -i.bak "s/change-me-in-production/$$SECRET/" .env; \
+		sed -i.bak "s/change-me-jwt-secret-in-production/$$JWT/" .env; \
+		rm -f .env.bak; \
+		echo "→ SECRET_KEY and JWT_SECRET_KEY generated"; \
+		echo ""; \
+		echo "  Edit .env and set:"; \
+		echo "    ANTHROPIC_API_KEY   (or set LLM_PROVIDER=ollama for local LLM)"; \
+		echo "    AUTH_PASSWORD_HASH  (run: make hash PASSWORD=yourpassword)"; \
+		echo ""; \
+	fi
+	docker compose up -d
+	@echo ""
+	@echo "→ Stack starting — waiting for core to be healthy..."
+	@sleep 8
+	@$(MAKE) check --no-print-directory
+
+up:
+	docker compose up -d
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f $(SERVICE)
+
+check:
+	@bash scripts/poc-healthcheck.sh http://localhost:8000
+
+hash:
+	@test -n "$(PASSWORD)" || (echo "Usage: make hash PASSWORD=yourpassword"; exit 1)
+	@docker compose run --rm core python -c \
+		"from app.auth import hash_password; print(hash_password('$(PASSWORD)'))"
+
+# ── Pilot Onboarding ───────────────────────────────────────────────────────────
+# Crée une organisation + admin + budget optionnel dans l'instance VibOps locale.
+# Idempotent : peut être relancé sans danger (le password est mis à jour).
+#
+# Paramètres requis :
+#   ORG      — nom de l'organisation  (ex: "Acme Corp")
+#   EMAIL    — email de l'admin       (ex: admin@acme.com)
+#   PASSWORD — mot de passe admin     (ex: changeme123)
+#
+# Paramètres optionnels :
+#   SLUG     — identifiant URL        (défaut: valeur de ORG en minuscules)
+#   BUDGET   — plafond mensuel USD    (ex: 5000 — aucun budget si absent)
+#   SOFT_CAP — seuil d'alerte %       (défaut: 80)
+#   HARD_CAP — seuil de blocage %     (défaut: 100)
+#
+# Exemples :
+#   make pilot-create-client ORG=acme EMAIL=admin@acme.com PASSWORD=s3cr3t
+#   make pilot-create-client ORG="BioTech AI" EMAIL=cto@biotech.io PASSWORD=p@ss BUDGET=12000
+
+ORG      ?=
+EMAIL    ?=
+PASSWORD ?=
+SLUG     ?= $(shell echo "$(ORG)" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
+BUDGET   ?=
+SOFT_CAP ?= 80
+HARD_CAP ?= 100
+
+pilot-create-client:
+	@test -n "$(ORG)"      || (echo "Erreur : ORG est requis.   Usage: make pilot-create-client ORG=acme EMAIL=... PASSWORD=..."; exit 1)
+	@test -n "$(EMAIL)"    || (echo "Erreur : EMAIL est requis. Usage: make pilot-create-client ORG=acme EMAIL=... PASSWORD=..."; exit 1)
+	@test -n "$(PASSWORD)" || (echo "Erreur : PASSWORD est requis."; exit 1)
+	$(eval _BUDGET_ARG := $(if $(filter-out ,$(BUDGET)),--budget $(BUDGET),))
+	docker compose exec core python -m scripts.pilot_provision \
+		--org      "$(ORG)" \
+		--slug     "$(SLUG)" \
+		--email    "$(EMAIL)" \
+		--password "$(PASSWORD)" \
+		--soft-cap "$(SOFT_CAP)" \
+		--hard-cap "$(HARD_CAP)" \
+		$(_BUDGET_ARG)
+
+# ── Backup ─────────────────────────────────────────────────────────────────────
+
+backup-now:
+	@echo "→ Lancement d'un backup manuel..."
+	docker compose exec backup sh -c \
+		'DEST=/backups/vibops_$$(date -u +%Y-%m-%dT%H%M%S)_manual.sql.gz; \
+		 pg_dump -h postgres -U vibops -d vibops_db | gzip > $$DEST && echo "✓ $$DEST"'
+
+backup-list:
+	@echo "Backups disponibles :"
+	docker compose exec backup sh -c 'ls -lh /backups/vibops_*.sql.gz 2>/dev/null || echo "(aucun backup)"'
+
+# ── Release ────────────────────────────────────────────────────────────────────
+
+publish:
+	@bash scripts/publish-install-repo.sh $(VERSION)
+
+# ── Help ───────────────────────────────────────────────────────────────────────
+
+help:
+	@echo ""
+	@echo "VibOps — available commands"
+	@echo ""
+	@echo "  make quickstart                            First-time setup + start"
+	@echo "  make up                                    Start the stack"
+	@echo "  make down                                  Stop the stack"
+	@echo "  make check                                 Health check (all services)"
+	@echo "  make logs SERVICE=core                     Tail logs for a service"
+	@echo "  make hash PASSWORD=yourpassword            Generate bcrypt password hash"
+	@echo ""
+	@echo "  make pilot-create-client \\"
+	@echo "    ORG=acme EMAIL=admin@acme.com \\"
+	@echo "    PASSWORD=s3cr3t [BUDGET=5000]            Provision a client org"
+	@echo ""
+	@echo "  make backup-now                            Manual PostgreSQL backup"
+	@echo "  make backup-list                           List available backups"
+	@echo ""
+	@echo "  make publish VERSION=v0.15.1               Publish to public install repo"
+	@echo ""
