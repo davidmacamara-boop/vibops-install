@@ -24,6 +24,7 @@ quickstart:
 		sed -i.bak "s/change-me-in-production/$$SECRET/" .env; \
 		sed -i.bak "s/change-me-jwt-secret-in-production/$$JWT/" .env; \
 		sed -i.bak "s/^POSTGRES_PASSWORD=$$/POSTGRES_PASSWORD=$$PGPASS/" .env; \
+		sed -i.bak "s|\$${POSTGRES_PASSWORD}|$$PGPASS|g" .env; \
 		rm -f .env.bak; \
 		echo "→ SECRET_KEY, JWT_SECRET_KEY and POSTGRES_PASSWORD generated"; \
 		echo ""; \
