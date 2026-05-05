@@ -89,7 +89,7 @@ Allow outbound HTTPS (port 443) → your-vibops-server.com
 | Key | Required | Where to get it |
 |-----|----------|----------------|
 | LLM API key | Depends on provider — not needed for Ollama | Claude: [console.anthropic.com](https://console.anthropic.com/settings/keys) · OpenAI: [platform.openai.com](https://platform.openai.com/api-keys) · or your own provider |
-| VibOps licence key | No (14-day trial auto-starts) | sales@vibops.ai |
+| VibOps licence key | No (14-day trial auto-starts) | david@vibops.ai |
 
 ---
 

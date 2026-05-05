@@ -1225,7 +1225,7 @@ The **trial banner** at the top of the console (visible to admins only) changes 
 - User quota exceeded → you can no longer create new accounts
 - Cluster quota exceeded → you can no longer connect new clusters
 
-To renew or upgrade to a higher plan: contact **`sales@vibops.ai`** or your VibOps sales representative.
+To renew or upgrade to a higher plan: contact **`david@vibops.ai`** or your VibOps sales representative.
 
 ---
 
@@ -1556,9 +1556,9 @@ The preference is saved locally and applied to both interface labels and agent r
 |---------|-------|--------|
 | `Cluster unreachable` | The kubeconfig context is no longer valid | Reconnect the gateway or update the kubeconfig |
 | `Confirmation required` | Action blocked by production guardrails | Reply "yes" to confirm or "cancel" |
-| `GPU limit exceeded` | License GPU quota reached | Contact sales@vibops.ai to upgrade |
+| `GPU limit exceeded` | License GPU quota reached | Contact david@vibops.ai to upgrade |
 | `User limit reached` | Maximum number of users reached for your plan | Upgrade the plan or delete inactive accounts |
-| `Licence expired` | License expired | Contact sales@vibops.ai |
+| `Licence expired` | License expired | Contact david@vibops.ai |
 | `No Prometheus configured` | Metrics not available | See Admin → Integrations → Prometheus |
 
 ### Support
@@ -1566,4 +1566,4 @@ The preference is saved locally and applied to both interface labels and agent r
 - Documentation: this file and `docs/installation.md`
 - API: `docs/openapi.json`
 - Issues: open a ticket with your VibOps contact
-- License and pricing: `sales@vibops.ai`
+- License and pricing: `david@vibops.ai`
