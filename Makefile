@@ -57,7 +57,11 @@ quickstart:
 	@echo "  4. Restart the agent after editing .env:"
 	@echo "       docker compose restart agent"
 	@echo ""
-	@echo "  Console: http://localhost:8003"
+	@HOST=$$(hostname -I 2>/dev/null | awk '{print $$1}' || echo "localhost"); \
+	echo "  Console: http://$$HOST:8003"; \
+	if [ "$$HOST" != "localhost" ] && [ "$$HOST" != "127.0.0.1" ]; then \
+		echo "           (or http://localhost:8003 from this machine)"; \
+	fi
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 up:
