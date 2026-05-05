@@ -172,7 +172,7 @@ make check
 # or: curl http://localhost:8000/api/v1/health
 ```
 
-Open **http://localhost:8003** in your browser. You should see the VibOps console.
+Open **http://localhost:8003** in your browser (or **http://SERVER_IP:8003** if installing on a remote server). You should see the VibOps console.
 
 Services started by the stack:
 
@@ -209,7 +209,7 @@ make pilot-create-client ORG="My Company" EMAIL=admin@example.com PASSWORD=yourp
 The script is **idempotent** — safe to re-run (password is updated on re-run).
 It prints the JWT token directly, ready to use for the first API calls.
 
-Log in at http://localhost:8003 with the credentials shown.
+Log in at **http://localhost:8003** (or **http://SERVER_IP:8003** on a remote server) with the credentials shown.
 
 > **Pilot clients** — to provision additional client orgs (each isolated), run `make pilot-create-client` once per client. See [`docs/runbooks/pilot-runbook.md`](runbooks/pilot-runbook.md) for the full onboarding checklist.
 
