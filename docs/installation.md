@@ -589,6 +589,29 @@ pre-filled in the UI. Do not use in production.
 
 ## 9. Configuration reference
 
+### Quick reference — what to set at install
+
+| Category | Variable | Auto-generated | Required |
+|----------|----------|:--------------:|:--------:|
+| **Licence** | `VIBOPS_LICENCE_KEY` | | optional (trial without) |
+| **Database** | `POSTGRES_PASSWORD`, `DATABASE_URL` | ✓ `make quickstart` | |
+| **Security** | `SECRET_KEY`, `JWT_SECRET_KEY`, `VAULT_KEY` | ✓ `make quickstart` | |
+| **Auth** | `AUTH_PASSWORD_HASH` | | ✓ `make hash PASSWORD=…` |
+| **LLM** | `LLM_PROVIDER`, `LLM_API_KEY` | | ✓ API key required |
+| **LLM on-prem** | `LLM_BASE_URL` | | if `LLM_PROVIDER=openai` |
+| **LLM local** | `OLLAMA_URL` | default set | if `LLM_PROVIDER=ollama` |
+| **Grafana** | `GRAFANA_PASSWORD` | ✓ `make quickstart` | |
+| **Git** | `GIT_PROVIDER`, `GIT_TOKEN`, `GIT_URL` | | optional |
+| **Datadog** | `DATADOG_API_KEY`, `DATADOG_APP_KEY` | | optional |
+| **SMTP** | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` | | optional |
+| **Internal** | `CORE_API_URL`, `AGENT_API_URL` | ✓ do not change | |
+
+**Minimum required after `make quickstart`:**
+1. `LLM_API_KEY` — your LLM provider API key (not needed if `LLM_PROVIDER=ollama`)
+2. `AUTH_PASSWORD_HASH` — run `make hash PASSWORD=yourpassword` and paste the result
+
+---
+
 ### Core environment variables
 
 | Variable | Default | Description |
@@ -615,12 +638,11 @@ pre-filled in the UI. Do not use in production.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LLM_PROVIDER` | `anthropic` | `anthropic` \| `openai` (on-prem) \| `ollama` |
+| `LLM_PROVIDER` | `claude` | `claude` \| `openai` (on-prem) \| `ollama` |
 | `LLM_MODEL` | `claude-sonnet-4-6` | Model name — interpreted by the active provider |
-| `ANTHROPIC_API_KEY` | `""` | Required when `LLM_PROVIDER=anthropic` |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | On-prem endpoint when `LLM_PROVIDER=openai` |
-| `OPENAI_API_KEY` | `""` | Leave empty for on-prem endpoints with no auth |
-| `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama endpoint when `LLM_PROVIDER=ollama` |
+| `LLM_API_KEY` | `""` | API key — required for `claude` and `openai`, leave empty for `ollama` |
+| `LLM_BASE_URL` | `""` | On-prem endpoint when `LLM_PROVIDER=openai` (e.g. `http://vllm:8000/v1`) |
+| `OLLAMA_URL` | `http://ollama:11434` | Ollama endpoint when `LLM_PROVIDER=ollama` |
 | `CORE_API_URL` | `http://core:8000` | Internal URL of the Core service |
 | `JWT_SECRET_KEY` | `change-me` | Must match Core's value |
 | `AGENT_MAX_HISTORY` | `20` | Max conversation turns kept in context |
