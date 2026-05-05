@@ -65,7 +65,7 @@ quickstart:
 	echo ""; \
 	echo "  Licence: trial mode — 14 days, 10 GPUs, 5 users, 2 clusters."; \
 	echo "           Add VIBOPS_LICENCE_KEY to .env to activate your licence."; \
-	echo "           Contact support@vibops.io to obtain a key."
+	echo "           Contact david@vibops.ai to obtain a key."
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 up:

@@ -212,7 +212,7 @@ Open https://vibops.${CLIENT}.internal in your browser.
 
 ## Support
 
-Contact: support@vibops.io
+Contact: david@vibops.ai
 Documentation: https://docs.vibops.io
 
 ---

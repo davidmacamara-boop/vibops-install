@@ -145,7 +145,7 @@ See [docs/installation.md](docs/installation.md) for the full Helm configuration
 
 - Documentation: [docs/installation.md](docs/installation.md)
 - Health check: `make check`
-- Support: support@vibops.io
+- Support: david@vibops.ai
 
 ---
 

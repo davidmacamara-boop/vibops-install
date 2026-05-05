@@ -343,7 +343,7 @@ docker compose down       # instead of make down
 - Run `make check` — it diagnoses the most common issues automatically
 - Full installation guide (for technical users): [`docs/installation.md`](docs/installation.md)
 - Incident runbook: [`docs/runbooks/incident-response.md`](docs/runbooks/incident-response.md)
-- Support: support@vibops.io
+- Support: david@vibops.ai
 
 ---
 
@@ -665,4 +665,4 @@ make up
 - Run `make check` — diagnoses the most common issues automatically
 - Full installation guide: [`docs/installation.md`](docs/installation.md)
 - Incident runbook: [`docs/runbooks/incident-response.md`](docs/runbooks/incident-response.md)
-- Support: support@vibops.io
+- Support: david@vibops.ai
