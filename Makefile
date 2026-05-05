@@ -38,6 +38,27 @@ quickstart:
 	@echo "→ Stack starting — waiting for core to be healthy..."
 	@sleep 8
 	@$(MAKE) check --no-print-directory
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  Next steps — required before first use:"
+	@echo ""
+	@echo "  1. Set your LLM provider in .env:"
+	@echo "       LLM_PROVIDER=claude   → add LLM_API_KEY=sk-ant-..."
+	@echo "       LLM_PROVIDER=openai   → add LLM_API_KEY + LLM_BASE_URL"
+	@echo "       LLM_PROVIDER=ollama   → no key needed"
+	@echo ""
+	@echo "  2. Create your admin account:"
+	@echo "       make hash PASSWORD=yourpassword"
+	@echo "       → paste the result into AUTH_PASSWORD_HASH in .env"
+	@echo ""
+	@echo "  3. Create your organisation:"
+	@echo "       make pilot-create-client ORG=\"My Company\" EMAIL=you@company.com PASSWORD=yourpassword"
+	@echo ""
+	@echo "  4. Restart the agent after editing .env:"
+	@echo "       docker compose restart agent"
+	@echo ""
+	@echo "  Console: http://localhost:8003"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 up:
 	docker compose up -d
