@@ -1,6 +1,6 @@
 # VibOps — Demo Scenarios for CSP POC
 
-21 scenarios tested live against the local kind cluster (no cloud account required).
+35 scenarios covering the full GitOps and HPC lifecycle — from multi-cluster discovery to ArgoCD auto-sync, cloud registry deploys, OpenShift, Slurm HPC training workflows, and unified GPU workload accounting (K8s + Slurm). Core scenarios (1–21) tested live against the local kind cluster (no cloud account required).
 Each prompt is a natural sentence — type it directly in the console chat tab.
 
 **Automated validation:** run all scenarios end-to-end with:
@@ -16,6 +16,7 @@ pytest perf/test_scenarios.py -v -s --agent-url http://localhost:8001
 | **DevOps / Platform engineer** | Ships infrastructure, manages deployments | YAML fatigue, slow feedback loops, prod changes blocked on review queues |
 | **MLOps engineer** | Runs LLM inference workloads | Model version drift, no visibility on what's running where, rollout risk without staging validation, resource sizing guesswork |
 | **Engineering manager** | Owns reliability and compliance | No audit trail, no visibility into what the team changed and when, risk of human error in prod |
+| **HPC / MLOps engineer** | Runs large-scale training on bare-metal Slurm clusters | Manual SSH to head node for every job submission, no audit trail, no approval gate, GPU budget waste from misconfigurations |
 
 ## Cluster state (2026-04-12)
 
@@ -863,6 +864,614 @@ These require a cluster with NVIDIA GPU nodes (EKS/GKE p3/a2 instances, or on-pr
 - **Utilization improvement:** GPU time-slicing on an idle GPU → 3–8× more workloads on same hardware
 - **Cost per inference:** lower utilization per workload = lower effective cost/token without buying more GPUs
 - **Discovery time:** idle GPU identification (kubectl + DCGM query + manual correlation) → 15 seconds automated
+
+---
+
+## Image build & CI pipeline scenarios
+
+> **Prerequisites for scenarios 22–25:**
+> - `GIT_TOKEN` set (GitHub PAT, scope: `repo` + `workflow`)
+> - `GHCR_TOKEN` set for push to ghcr.io (or `DOCKERHUB_TOKEN`)
+> - Configure them in Admin → Git and store registry token via the Secrets tab
+> - These scenarios use a real repo (`acme/api-server`) — substitute your own repo name
+
+---
+
+## Scenario 22 — Build and push a Docker image from source (~90s) ✅ validated
+**Persona: DevOps / Platform engineer** — *"A developer merged a security patch. I need a new image in the registry in the next 10 minutes — before the prod deploy window opens."*
+
+**Step 1 prompt:**
+> *The security fix just landed in main on acme/api-server. Clone the repo, build the image with the Dockerfile at the root, tag it v1.4.3-hotfix, and push it to ghcr.io/acme/api-server. Use my git_token and ghcr_token secrets — I don't want credentials hardcoded anywhere.*
+
+**Tools triggered:** `git_clone(repo: acme/api-server, ref: main, token: @secret:git_token)` → `docker_build_push(image: ghcr.io/acme/api-server:v1.4.3-hotfix, registry_token: @secret:ghcr_token)`
+
+**What the agent produces:**
+- Clones the repo at the latest main commit — SHA logged
+- Streams the Docker build layer by layer in the chat: `Step 1/12 — FROM python:3.11-slim`, `Step 4/12 — RUN pip install...`, exactly what you'd see in a terminal
+- Login via `--password-stdin`: token never appears in any log line, process list, or audit record
+- Push completes: `ghcr.io/acme/api-server:v1.4.3-hotfix` — digest returned: `sha256:4a7c3b9e...`
+
+**Step 2 prompt:**
+> *Good. Pin the prod deployment to that exact digest — I don't want it to drift on the next pod restart.*
+
+**Tools triggered:** `patch_deployment(name: api-server, namespace: prod, image: ghcr.io/acme/api-server@sha256:4a7c3b9e..., cluster: vibops-dev)`
+
+**What the agent produces:**
+- Patches the deployment to the digest — not the tag. Immutable reference.
+- Confirms rollout: `api-server 2/2 Running — image: ghcr.io/acme/api-server@sha256:4a7c3b9e...`
+
+**Talking points:**
+- *"Two sentences: security patch in prod, pinned to a digest. Without VibOps: checkout locally, docker build, docker push, copy the digest from terminal output, edit values.yaml or run kubectl set image, verify rollout. That's 6 manual steps and 20–30 minutes — for a process that happens multiple times per week."*
+- *"The credential story: the agent calls `docker login --password-stdin`. The token is never in any command argument, never in any log line, never in the process list. This is enforced at the connector level — it's not a convention a developer could accidentally bypass."*
+- *"The digest is a cryptographic guarantee. `v1.4.3-hotfix` is a mutable tag — anyone can overwrite it. `sha256:4a7c3b9e...` is immutable. If this image is in prod at 3am and a pod restarts, it will pull exactly this image — not whatever `latest` resolves to that day."*
+- *"Every step is in the audit trail: commit SHA, build job ID, push digest, who triggered it, when. 'What image is in prod, when was it built, and from which commit?' — instant answer, no digging."*
+- *"This runs on the VibOps gateway — the machine that lives next to your cluster. Not on a developer laptop with a different Docker version, a different base image cache, a different build context."*
+
+**ROI:**
+- **Time per build cycle:** 20–30 min (checkout, build, push, copy digest, patch deployment, verify) → 2 sentences + build time — **90% reduction**
+- **At scale:** a DevOps team doing 10 build/push cycles per week × 25 min × $75/hr = **$1,560/week, $81k/year** — just in manual build overhead for one active project
+- **"Works on my machine" builds:** 1 in 5 manual builds fails due to local env differences (Docker version, base image cache, missing layer) → extra 30 min debug per incident × 2 incidents/week = **$5,850/year** in wasted debug time per engineer
+- **Security patch SLA:** unpatched prod image window goes from 30+ min (manual) to ~5 min (build time only) — critical for CVE response SLAs
+- **Audit compliance:** "which commit is in prod and who deployed it?" answered in 1 query vs a manual git log + kubectl + Slack archaeology session
+
+---
+
+## Scenario 23 — CI gate before deploy (~2–4min, 2-step) ✅ validated
+**Persona: DevOps / MLOps** — *"The team ships fast but we've had two staging incidents this quarter from untested deploys. I need a mandatory CI gate that nobody can forget or skip."*
+
+**Step 1 prompt:**
+> *Before we deploy anything to staging today, trigger the integration-tests.yml workflow on acme/api-server against the main branch. Wait for the result — if it fails, I want to know before we touch the cluster.*
+
+**Tools triggered:** `ci_trigger(repo: acme/api-server, workflow: integration-tests.yml, ref: main)` → `ci_wait(repo: acme/api-server, run_id: <polled from runs API>, timeout: 900)`
+
+**What the agent produces — happy path:**
+- Dispatches the GitHub Actions `workflow_dispatch` event
+- Polls the run status every 5 seconds — visible in the tool log pane
+- `✅ integration-tests.yml — success — 2m 14s — run #9831742`
+- Direct link to the GitHub Actions run summary
+
+**What the agent produces — failure path:**
+- `❌ integration-tests.yml — failure — 1m 47s`
+- Agent stops: *"The integration tests failed on run #9831742. I won't proceed with the deploy. Here's the link to the failing step."*
+- **No cluster action happens.** The gate is structural — the agent does not ask "are you sure?", does not offer to override, does not deploy on the next prompt unless the tests are fixed and retriggered.
+
+**Step 2 prompt (after CI passes):**
+> *Tests passed. Deploy the api-server Helm release to staging on vibops-dev, set the image tag to main, and confirm the pods are healthy.*
+
+**Tools triggered:** `helm_upgrade(release: api-server, namespace: staging, cluster: vibops-dev, set: image.tag=main)` → `get_deployment_status`
+
+**What the agent produces:**
+- Helm upgrade: revision 8 → `api-server` upgraded
+- `2/2 pods Running` in staging — rollout confirmed
+
+**Talking points:**
+- *"The gate is real. When the tests fail, VibOps stops — it doesn't ask 'are you sure?' and proceed anyway. This is enforced structurally: ci_wait returns a terminal status and the agent branches on it, exactly like the PolicyEngine confirmation flow for destructive actions."*
+- *"No new CI/CD YAML to write. VibOps triggers the GitHub Actions workflows you already have — it's not a parallel CI system, it's the orchestration layer that connects your existing pipelines to your deploy flow."*
+- *"The Admin → CI panel shows this run the moment it's triggered: repo, workflow, branch, live status, duration, and a direct link to the GitHub Actions log. Every team member can see the gate status without leaving the console."*
+- *"This works identically for GitLab CI: same prompt, same behavior, `ci_trigger` dispatches a GitLab pipeline instead. The connector normalizes the two providers — your operators don't need to know which one you're using."*
+- *"The audit trail logs two jobs: ci_trigger and ci_wait, both with inputs and outputs. 'Did we run CI before this deploy?' is now a queryable fact, not a process question."*
+
+**ROI:**
+- **Bad staging deploys:** a team shipping 20 times/week typically sees 2–3 untested deploys/week slip through — each costs 30–45 min of debug + rollback = **$75–$112/incident** × 120/year = **$9,000–$13,500/year per team** in wasted debugging time
+- **Bad deploy reaching prod:** 1–2 times/year for a team without a mandatory CI gate → P2 incident = 2–4 hours × 2 engineers at $75/hr = **$300–$600 per incident** + revenue exposure (SaaS at $1M ARR loses ~$115/min)
+- **Context switching cost:** without VibOps, each deploy cycle requires 4–5 tool switches (terminal → GitHub Actions UI → kubectl → Slack → back) at ~15 min recovery each = 60–75 min of invisible friction per deploy × 20 deploys/week = **$1,125–$1,406/week, ~$65k/year per engineer**
+- **Zero new CI infrastructure:** the CI connector reuses existing GitHub Actions / GitLab CI pipelines. No new YAML to write, no new secret to rotate, no new system to maintain — the marginal cost of the gate is one prompt
+
+---
+
+---
+
+## Scenario 24 — Full pipeline: clone → build → CI → deploy (~5min) ✨ crown jewel
+**Persona: DevOps / Platform engineer** — *"PR #47 just merged. I want to go from source code to a validated deployment in staging without opening a terminal — and I want the chain of custody documented for the next SOC 2 audit."*
+
+**Prompt:**
+> *PR #47 just merged to main on acme/api-server. Here's the full release flow: clone main, build and push the image to ghcr.io/acme/api-server:1.5.0 using my ghcr_token, trigger the smoke-tests.yml workflow on that same branch, wait for it to complete — if it passes, deploy the api-server Helm release to staging on vibops-dev using the exact image digest. If the tests fail, stop and tell me what broke.*
+
+**Tools triggered (sequential, agent manages the chain):**
+1. `git_clone(repo: acme/api-server, ref: main, token: @secret:git_token)` → commit SHA: `a3f8c21`
+2. `docker_build_push(image: ghcr.io/acme/api-server:1.5.0, registry_token: @secret:ghcr_token)` → digest: `sha256:9f1e2d8c...`
+3. `ci_trigger(repo: acme/api-server, workflow: smoke-tests.yml, ref: main)` → run_id: `9831742`
+4. `ci_wait(run_id: 9831742, timeout: 900)` → `success — 2m 31s`
+5. `helm_upgrade(release: api-server, namespace: staging, cluster: vibops-dev, set: image.digest=sha256:9f1e2d8c...)` → revision 12
+
+**What the agent produces:**
+- Progress visible step by step in the tool log — the operator watches the pipeline execute in real time
+- Docker build streams layer by layer during step 2
+- CI polling every 5 seconds during step 4 — status updates visible
+- Final confirmation: *"api-server deployed to staging. Image: `ghcr.io/acme/api-server:1.5.0@sha256:9f1e2d8c...`. Smoke tests: success in 2m 31s (run #9831742). Helm revision 12. Commit: a3f8c21."*
+
+**If smoke tests fail at step 4:**
+- Agent halts before helm_upgrade: *"Smoke tests failed on run #9831742 after 1m 47s. The image was built and is available at `ghcr.io/acme/api-server:1.5.0` but I didn't touch staging. Fix the tests and re-run the pipeline."*
+- Staging cluster is in exactly the state it was before — no partial deploy, no rollback needed
+- The build image is preserved in the registry — no need to rebuild when tests are fixed
+
+**Talking points:**
+- *"That's a full CD pipeline — source code to validated staging deployment — in one sentence. Without VibOps: open a terminal, checkout, docker build (10 min), docker push, copy the digest from the output, open GitHub Actions, kick off the workflow manually, wait, open kubectl, helm upgrade with the digest, verify rollout. That's 8 manual steps, 4 tool switches, and 45–60 minutes of a senior engineer's time. Every time a PR merges."*
+- *"The chain of custody is automatic: git commit SHA `a3f8c21` → image digest `sha256:9f1e2d8c...` → CI run #9831742 → Helm revision 12. Every link in the chain is in the VibOps audit trail. When your auditor asks 'what's in staging and what approved it?', that's a one-query answer."*
+- *"Image pinned to a digest, not a tag. `1.5.0` is a mutable label — anyone can overwrite it. `sha256:9f1e2d8c...` is cryptographically immutable. The pod running in staging at 3am is guaranteed to be the exact image that passed your smoke tests — not whatever the tag resolves to that day."*
+- *"The CI gate is structural. When smoke tests fail, step 5 never runs. Not 'VibOps asked and the engineer said no' — the deploy branch literally does not execute. Same guarantee as the PolicyEngine confirmation gate for destructive actions."*
+- *"Any team member can trigger this — not just the senior DevOps engineer who knows the Docker push syntax and the kubectl set image command. The knowledge is in the prompt, not in the person."*
+
+**ROI:**
+- **Time per release cycle:** 45–60 min manual (checkout, build, push, kick CI, wait, deploy, verify) → one sentence + pipeline execution time — **95% reduction**
+- **At scale:** a team shipping 10 releases/week × 50 min × $75/hr = **$625/week, $32,500/year** — and this is before accounting for the incidents that manual pipelines generate
+- **CD pipeline setup cost avoided:** writing and maintaining a GitHub Actions or Jenkins CD pipeline for this flow = 3–5 days initial + 2 hrs/month maintenance = **$2,250–$3,750 one-time + $1,800/year** per project, per pipeline variant — VibOps replaces this with zero infrastructure
+- **SOC 2 audit preparation:** reconstructing "what commit is in prod, which CI run approved it, and who deployed it" manually takes 1–2 days per quarter = **$4,500–$9,000/year** in compliance overhead — the VibOps audit trail answers this instantly for every deployment
+- **Wrong-digest deploys:** copy-pasting a 64-character sha256 digest from terminal output is a well-known error source — one transposed character = wrong image in prod. Automatic digest propagation from build step to deploy step eliminates this class of error entirely
+- **Team scaling:** onboarding a junior engineer to run the full release flow takes days when the process lives in runbooks; with VibOps it takes one prompt demonstration
+
+---
+
+---
+
+## Scenario 25 — Registry inspection + image drift detection (~20s)
+**Persona: MLOps engineer / Platform engineer** — *"We had a mystery regression last week. A pod restarted in prod and started returning different outputs. I want to know if we have any environments running untagged images before it happens again."*
+
+**Step 1 prompt:**
+> *Do a registry audit for me: list all available tags for ghcr.io/acme/api-server, then check what image tag prod and staging are actually running. Tell me if anything is untagged, running latest, or if the two environments have drifted from each other.*
+
+**Tools triggered:** `registry_list_tags(image: ghcr.io/acme/api-server, token: @secret:ghcr_token)` → `get_deployment_status(name: api-server, namespace: prod)` + `get_deployment_status(name: api-server, namespace: staging)` in parallel
+
+**What the agent produces:**
+- Registry: 23 tags — `v1.5.0`, `v1.4.3-hotfix`, `v1.4.2`, `v1.4.1`, `v1.4.0`, `main`, `latest` ...
+- Prod: `api-server` running `ghcr.io/acme/api-server:latest` — **⚠ RISK: untagged image, imagePullPolicy: Always**
+- Staging: `api-server` running `ghcr.io/acme/api-server:v1.5.0` — pinned, OK
+- **Drift detected:** prod is behind staging by 2 versions. Prod is on `latest`, staging is on `v1.5.0`.
+- *"Prod is running `latest` with `imagePullPolicy: Always`. Any pod restart — OOM, node drain, rolling update — will pull whatever `latest` resolves to at that moment. This is most likely the cause of your mystery regression last week."*
+
+**Step 2 prompt:**
+> *Pin prod to the same image as staging right now. I want both environments on v1.5.0.*
+
+**Tools triggered:** `patch_deployment(name: api-server, namespace: prod, image: ghcr.io/acme/api-server:v1.5.0)` → `get_deployment_status`
+
+**What the agent produces:**
+- Prod patched to `v1.5.0`, rollout confirmed: `2/2 Running`
+- *"Prod and staging are now both on `v1.5.0`. `latest` drift risk eliminated."*
+
+**Talking points:**
+- *"The mystery regression last week was almost certainly this: a pod restarted in prod, pulled `latest`, and got a newer model than the one that was running. No deploy happened. No one noticed. The image just quietly changed. VibOps flags this in 20 seconds — before the next restart."*
+- *"This is a cross-layer check: registry state + running deployment state, compared and correlated in a single query. Manually, that's: log into the GHCR UI, list tags, open a terminal, kubectl get deployment in prod, kubectl get deployment in staging, compare the image strings by hand. 10–15 minutes of mechanical work, easy to miss a detail under pressure."*
+- *"Two separate risks surfaced and fixed in one conversation: the untagged image (drift risk) and the prod/staging version gap (promotion gap). In a typical ops review, you'd catch at most one of these — and only if someone thought to check."*
+- *"`imagePullPolicy: Always` with an untagged image is the configuration that killed the reliability of production systems you thought were stable. It's not rare: surveys consistently show 30–40% of production deployments have at least one service running `latest`. VibOps makes this visible and fixable in seconds."*
+- *"Run this as a pre-deploy gate every time: 'Check the registry before we promote to prod.' It costs 20 seconds and eliminates an entire class of regression."*
+
+**ROI:**
+- **Registry audit time:** 10–15 min (GHCR UI + 2× kubectl + manual comparison) → 20s — **97% reduction**; a 5-service platform audited daily: 10 min × 5 × 260 days = **217 hrs/year = $16,275/year** in manual audit overhead eliminated
+- **Image drift incident cost:** avg 45 min to diagnose (correlate restart event + image pull log + registry state) + 15 min to fix = **$75 per incident**; teams typically experience this 1–2×/month = **$900–$1,800/year per team**; at 10 teams: **$9,000–$18,000/year** in drift-related incident cost
+- **Mystery regression from `latest`:** the harder cases — where `latest` pulled a breaking model change — cause P2/P3 incidents (2–4 hrs × 2 engineers = $300–$600) and user-facing quality degradation; with SaaS revenue at $1M ARR, **each unexplained regression episode costs $500–$2,000** in engineering + trust
+- **Avoided registry tooling cost:** JFrog Xray, Anchore, or similar registry scanning platforms start at **$10k–$50k/year**; this audit capability is built into VibOps with no additional license
+- **Pre-deploy gate at zero marginal cost:** running this check before every prod promotion adds 20 seconds per deploy and eliminates the entire drift risk category — the ROI is asymmetric: 20 seconds of prevention vs a 45-min incident every time it's skipped
+
+---
+
+## Scenario 26 — Deploy a private image to Kubernetes (~60s, 2-step)
+
+**Context:** The team has just pushed a new image to their private GHCR registry (e.g., result of Scenario 22). They now want to deploy it to their production Kubernetes cluster. The cluster has never pulled from this registry before — no pull secret exists yet.
+
+**Prerequisites:**
+- A running Kubernetes cluster reachable from the VibOps worker (any distribution: EKS, GKE, AKS, RKE2, bare metal)
+- `GHCR_TOKEN` stored as `@secret:ghcr_token`
+
+---
+
+**Step 1 prompt:**
+> *We need to deploy ghcr.io/acme/api-server:v1.2.3 on the prod cluster, namespace api. The registry is private. Set up the credentials and deploy it on port 8080.*
+
+**Tools triggered (in sequence):**
+1. `setup_kubeconfig(cluster: prod-cluster)` — configures kubectl context
+2. `create_pull_secret(name: ghcr-pull-secret, registry: ghcr.io, registry_username: acme-bot, registry_token: @secret:ghcr_token, namespace: api)` — creates/updates the pull secret (idempotent)
+3. `deploy_webapp(name: api-server, image: ghcr.io/acme/api-server:v1.2.3, port: 8080, namespace: api, image_pull_secret: ghcr-pull-secret)` — creates Deployment + NodePort Service with `imagePullSecrets`
+
+**What the agent produces:**
+- *"Pull secret `ghcr-pull-secret` created in namespace `api` — registry credentials stored."*
+- *"Deployment `api-server` (ghcr.io/acme/api-server:v1.2.3) deployed in namespace `api` on port 8080 with imagePullSecrets: ghcr-pull-secret."*
+- No `ImagePullBackOff`. No manual `kubectl create secret`. One prompt.
+
+---
+
+**Step 2 prompt:**
+> *Good. Now update it to v1.2.4 — image is already in the registry.*
+
+**Tools triggered:** `patch_deployment(name: api-server, namespace: api, image: ghcr.io/acme/api-server:v1.2.4)`
+
+**What the agent produces:**
+- Deployment patched, rollout confirmed: `2/2 Running`
+- *"The pull secret is already in place — no credentials step needed for updates."*
+
+---
+
+**Talking points:**
+- *"The most common reason a Kubernetes deploy fails in practice is not a bug in the app — it's `ImagePullBackOff` because no one set up credentials for the registry. VibOps handles that in the same prompt as the deploy. You don't even have to think about it."*
+- *"This works on any cluster you have kubectl access to — EKS, GKE, AKS, on-prem, bare metal. It's not kind-specific. Whatever is in your kubeconfig is a valid target."*
+- *"`create_pull_secret` uses `--dry-run=client -o yaml | kubectl apply` — it's idempotent. Running it again on the next deploy rotation doesn't fail, doesn't create duplicates. It just refreshes the token if it changed."*
+- *"Step 2 shows the steady-state flow: once the secret exists, every subsequent deploy is a single `patch_deployment`. The credential setup is a one-time operation per cluster/namespace pair."*
+- *"In a typical team without VibOps, this is: find the right `kubectl create secret` syntax, get the registry URL right, get the base64 encoding right, apply it to the right namespace, then run the deployment manifest — 15–20 minutes for a developer who doesn't do it daily, and at least one StackOverflow lookup. With VibOps: one prompt, 10 seconds."*
+
+**ROI:**
+- **ImagePullBackOff incidents:** avg 20–30 min to diagnose and fix (check pod events, find correct `kubectl create secret` syntax, apply to right namespace, re-trigger rollout) — **$42–$63 per incident** at $125/hr; teams typically hit this 3–4×/year per cluster × 5 clusters = **$630–$1,260/year** in avoidable toil
+- **New cluster onboarding:** each new cluster requires pull secrets to be replicated to every namespace; without automation, 5 namespaces × 3 registries × 15 min = 225 min per cluster onboard; at 3 new clusters/year: **$1,406/year** saved
+- **Reduced deploy friction on regulated environments:** teams deploying to airgapped or restricted clusters (banking, healthcare, defense) cannot use public images — private registry is mandatory; every deploy requires a credential step; VibOps absorbs this entirely
+- **Reduced on-call escalation:** `ImagePullBackOff` on a prod cluster at 2am generates P2 alerts — cost is $300–$800/incident (on-call premium + incident management) vs. a credential check that takes 10 seconds
+- **Compound effect with Scenario 22:** the S22 + S26 chain covers the full cycle: source code → built image → credential setup → deployed to K8s. This is what a mature GitOps pipeline does. VibOps does it via natural language in under 3 minutes.
+
+---
+
+## Scenario 27 — GitOps loop: ArgoCD auto-sync (~30s, 2-step)
+
+**Context:** The team uses ArgoCD to manage their cluster. Today, every time a developer merges to main, someone has to remember to go into the ArgoCD UI and click "Sync" — or the cluster silently falls behind git. VibOps closes this loop.
+
+---
+
+**Step 1 prompt:**
+> *Enable auto-sync on the api-server application in ArgoCD. I want the cluster to update automatically whenever we push to git. Also enable self-healing — if someone patches the cluster manually it should revert to git.*
+
+**Tools triggered:**
+1. `argocd_get_app(name: api-server)` — reads current spec (implicit in enable_auto_sync)
+2. `argocd_enable_auto_sync(name: api-server, prune: true, self_heal: true)`
+
+**What the agent produces:**
+- *"Auto-sync enabled on 'api-server' (prune=true, selfHeal=true)."*
+- *"ArgoCD will now sync automatically within 3 minutes of any git push. Manual cluster changes will be reverted to the git state."*
+
+---
+
+**Step 2 prompt:**
+> *Good. Now update the image to v1.3.0 in the Helm values and push it. Don't sync manually — I want to see auto-sync kick in.*
+
+**Tools triggered:** `git_clone` → `git_patch_yaml(file: helm/values.yaml, path: image.tag, value: v1.3.0)` → `git_commit_push`
+
+**What the agent produces:**
+- Commit pushed to `main`
+- *"Commit pushed. ArgoCD will detect the change within 3 minutes and apply it automatically — no manual sync needed. Monitor with argocd_get_app(name: api-server) to see the rollout."*
+
+**Talking points:**
+- *"Before this, every git push needed a human to remember to sync ArgoCD. With auto-sync enabled, the cluster is always exactly what's in git — nothing more, nothing less. The human step is gone."*
+- *"selfHeal=true is the stronger guarantee: even if an engineer patches a deployment directly with kubectl, ArgoCD will revert it within 3 minutes. Git is the only source of truth."*
+- *"prune=true means resources you delete from git are also deleted from the cluster. Without it, deleted manifests accumulate silently and you end up with ghost deployments consuming resources you forgot about."*
+- *"This is the difference between 'we have ArgoCD' and 'we have GitOps'. Many teams install ArgoCD but keep triggering syncs manually — they have the tool but not the practice. VibOps sets the practice in one prompt."*
+- *"You can also disable it: argocd_disable_auto_sync before a manual intervention window, re-enable after. The agent handles the maintenance window without UI access."*
+
+**ROI:**
+- **Manual sync overhead:** each git push requires a human to open the ArgoCD UI, find the app, click Sync — avg 3–5 min; at 8 deploys/day × 250 days = 2,000 syncs/year × 4 min = **133 hrs/year = $9,975/year** in wasted engineering time
+- **Missed sync incidents:** when someone forgets to sync, prod runs stale code; avg 45 min to notice + diagnose + fix = **$94/incident**; teams report this 2–3×/month = **$2,256–$3,384/year**
+- **Drift from manual kubectl patches:** without selfHeal, manual fixes accumulate; at audit time (SOC2, ISO27001), unexplained config drift = findings; each finding = **$2,000–$5,000** in remediation + auditor time
+- **ArgoCD UI access elimination:** with VibOps, operators who don't have ArgoCD UI credentials can still manage sync policy via the agent — reduces access proliferation and audit surface
+
+---
+
+## Scenario 28 — Cloud registry deploy: ECR / GCR / ACR (~45s)
+
+**Context:** The client runs EKS on AWS (or GKE on GCP, or AKS on Azure). Their images are in a private cloud registry. The equivalent of Scenario 26, but the token is managed by the cloud provider and expires — it can't be stored as a static PAT.
+
+---
+
+**EKS + ECR variant**
+
+**Prompt:**
+> *We need to deploy our new API to EKS. The image is in our ECR registry at 123456789.dkr.ecr.eu-west-1.amazonaws.com/api-server:v2.1.0. Set up the credentials and deploy it in the api namespace.*
+
+**Tools triggered:**
+1. `create_ecr_pull_secret(name: ecr-pull-secret, registry: 123456789.dkr.ecr.eu-west-1.amazonaws.com, region: eu-west-1, namespace: api)`
+   — fetches short-lived token via `aws ecr get-login-password`
+2. `deploy_webapp(name: api-server, image: 123456789.dkr.ecr.eu-west-1.amazonaws.com/api-server:v2.1.0, port: 8080, namespace: api, image_pull_secret: ecr-pull-secret)`
+
+**What the agent produces:**
+- *"ECR pull secret 'ecr-pull-secret' created in namespace 'api' (token valid 12 hours)."*
+- *"Deployment 'api-server' running v2.1.0 in namespace 'api'."*
+
+---
+
+**GKE + Artifact Registry variant**
+
+**Prompt:**
+> *Deploy the model server on GKE. Image is europe-west1-docker.pkg.dev/acme-project/ml-models/inference:v3.0. Use the GCP service account from vault.*
+
+**Tools triggered:**
+1. `create_gcr_pull_secret(name: gar-pull-secret, registry: europe-west1-docker.pkg.dev, key_json: @secret:gcp_sa_key, namespace: ml)`
+2. `deploy_webapp(name: inference-server, image: europe-west1-docker.pkg.dev/acme-project/ml-models/inference:v3.0, port: 8080, namespace: ml, image_pull_secret: gar-pull-secret)`
+
+---
+
+**Talking points:**
+- *"ECR tokens expire after 12 hours. In a standard setup, that means someone has to refresh the pull secret manually before each deploy rotation, or the next pod restart fails with ImagePullBackOff. VibOps fetches a fresh token automatically every time you call create_ecr_pull_secret — you never manage token expiry."*
+- *"The same interface works for ECR, GCR, and ACR. Your ops team doesn't need to know the specific aws ecr / gcloud auth / az acr commands for each cloud. One natural language prompt, the agent picks the right action."*
+- *"This is particularly valuable for multi-cloud setups: some workloads on AWS, some on GCP, some on Azure. Without VibOps, that's three different credential workflows, three different CLI syntaxes. With VibOps, it's the same prompt."*
+
+**ROI:**
+- **ECR token refresh overhead:** 5 min per cluster per refresh cycle; at 2 clusters × 2 refreshes/day × 250 days = 2,500 refreshes/year × 5 min = **208 hrs/year = $15,625/year** at $75/hr SRE cost
+- **ImagePullBackOff from expired ECR token:** P2 incident at 2am — avg $500 per incident (on-call + incident management); happens 4–6×/year per team = **$2,000–$3,000/year**
+- **Multi-cloud credential standardisation:** eliminating per-cloud documentation, onboarding, and tribal knowledge — **$3,000–$5,000/year** in knowledge management overhead for a 5-person ops team
+
+---
+
+## Scenario 29 — OpenShift deploy (~45s, 2-step)
+
+**Context:** Enterprise prospect running OpenShift (common in banking, telecom, public sector, defense). Their platform team uses OpenShift because of its security defaults and enterprise support. VibOps works on OpenShift — same interface, two additional actions for OpenShift-specific primitives (SCC + Route).
+
+---
+
+**Step 1 prompt:**
+> *Deploy our inference API on OpenShift, namespace inference. Image is registry.acme.com/inference-api:v1.0. The app needs to run as a non-root user so it'll need the anyuid SCC.*
+
+**Tools triggered:**
+1. `create_pull_secret(name: acme-pull-secret, registry: registry.acme.com, registry_username: robot, registry_token: @secret:acme_registry_token, namespace: inference)`
+2. `openshift_add_scc(scc: anyuid, service_account: default, namespace: inference)`
+3. `deploy_webapp(name: inference-api, image: registry.acme.com/inference-api:v1.0, port: 8080, namespace: inference, image_pull_secret: acme-pull-secret)`
+
+**What the agent produces:**
+- *"Pull secret 'acme-pull-secret' created in namespace 'inference'."*
+- *"SCC 'anyuid' added to serviceaccount 'default' in namespace 'inference'."*
+- *"Deployment 'inference-api' running v1.0 in namespace 'inference'."*
+
+---
+
+**Step 2 prompt:**
+> *Now expose it externally at inference-api.apps.acme.com.*
+
+**Tools triggered:** `openshift_create_route(service: inference-api, hostname: inference-api.apps.acme.com, namespace: inference)`
+
+**What the agent produces:**
+- *"Route 'inference-api' created — inference-api.apps.acme.com → inference-api in namespace 'inference'."*
+
+---
+
+**Talking points:**
+- *"OpenShift has stricter security defaults than vanilla Kubernetes — the SCC system prevents containers from running as root by default. This is a good thing for security, but it means nearly every workload needs an SCC configured before it can start. VibOps handles this in the same prompt as the deploy."*
+- *"Routes are OpenShift's equivalent of Ingress. The syntax is different, the YAML is different, the oc CLI is different — but the VibOps prompt is identical. An operator who knows 'expose it at this hostname' doesn't need to know whether the cluster uses Ingress or Routes."*
+- *"Your OpenShift platform team doesn't need to give every developer oc CLI access or OpenShift console access. They can expose VibOps as the ops interface — and the platform team keeps full audit trail of every action taken."*
+- *"Everything else — deploy_webapp, patch_deployment, scale_cluster, get_recent_logs, health_check — works unchanged on OpenShift. You don't learn a new tool, you just gain two new actions for OpenShift-specific primitives."*
+
+**ROI:**
+- **OpenShift SCC friction:** every new workload requires SCC configuration; without automation, this is a ticket to the platform team (avg 2–4 hour SLA) × 3 new workloads/sprint × 26 sprints = **156–312 hrs/year of platform team tickets** at $125/hr = **$19,500–$39,000/year** in coordination overhead
+- **oc CLI onboarding:** teaching developers the oc CLI, OpenShift console, and RBAC adds 1–2 days per new hire; at 5 hires/year × 1.5 days × $600/day = **$4,500/year** in onboarding overhead
+- **Route configuration errors:** incorrect hostname, missing TLS termination, wrong port — each a 30–60 min debug session; at 2×/month = **$1,875–$3,750/year**
+- **Audit trail for compliance:** OpenShift clusters in regulated sectors require evidence of every change; VibOps audit log satisfies this automatically — replaces or supplements manual change management ticketing
+
+---
+
+## Scenario 30 — Slurm HPC: multi-node GPU training job submission (~60s, interactive)
+
+**Persona: MLOps engineer** — *"We have a Slurm cluster for large-scale training. I need to launch a multi-node job without logging into the head node."*
+
+**Context:** The client runs GPU training on a bare-metal Slurm cluster (not Kubernetes). Their MLOps team currently SSHes into the head node to run `sbatch` manually — no audit trail, no approval gate, no visibility for the wider team. The SSH key is stored in VibOps Secrets Vault. The cluster is registered in VibOps as a Slurm gateway (see Scenario 33) — connection via `slurm_config` JSONB, transport REST > SSH+JSON, no env vars required.
+
+---
+
+**Step 1 prompt:**
+> *Check the GPU capacity on our Slurm cluster (gpu.hpc.acme.com) — specifically the gpu partition. How many nodes are available and what's the queue looking like?*
+
+**Tools triggered:**
+1. `slurm_get_cluster_info(host: gpu.hpc.acme.com, partition: gpu)`
+2. `slurm_list_jobs(host: gpu.hpc.acme.com, partition: gpu, state: running)`
+
+**What the agent produces:**
+- *"Cluster gpu.hpc.acme.com — gpu partition: 8 nodes, 64 GPUs (A100 80GB). 5 nodes available, 3 running jobs (2 pending). Estimated wait for 4-node allocation: ~12 minutes based on current queue depth."*
+
+---
+
+**Step 2 prompt:**
+> *Submit a training job: 4 nodes, 8 GPUs per node, run train.py with batch_size=512, epochs=50. Use the gpu partition. Job name: llm-finetune-v3.*
+
+**Tools triggered:**
+1. `slurm_submit_job(job_name: llm-finetune-v3, nodes: 4, gpus_per_node: 8, partition: gpu, script: train.py, host: gpu.hpc.acme.com, dry_run: true, ssh_key: @secret:slurm_ssh_key)`
+
+**What the agent produces (dry run preview):**
+```
+#!/bin/bash
+#SBATCH --job-name=llm-finetune-v3
+#SBATCH --nodes=4
+#SBATCH --gpus-per-node=8
+#SBATCH --partition=gpu
+#SBATCH --output=/var/log/slurm/llm-finetune-v3-%j.out
+#SBATCH --error=/var/log/slurm/llm-finetune-v3-%j.err
+
+srun python train.py --batch_size=512 --epochs=50
+```
+*"This will request 4 nodes × 8 GPUs = 32 A100s. Confirm to submit?"*
+
+---
+
+**Step 3 prompt:**
+> *Yes, submit it.*
+
+**Tools triggered:** `slurm_submit_job(confirmed: true, ...)`
+
+**What the agent produces:**
+- *"Job submitted — ID: 48291. Status: PENDING (waiting for 4-node allocation). Estimated start: ~12 min. Use slurm_get_job_status(48291) to track progress."*
+
+---
+
+**Talking points:**
+- *"The dry-run step is not optional theatre — it's how you prevent a 32-GPU allocation mistake at $12/hr per GPU. The sbatch script is shown before any job is scheduled."*
+- *"The SSH key never leaves VibOps Vault. The MLOps engineer typed @secret:slurm_ssh_key — they never saw the key, it was never in chat history, it was never on their laptop."*
+- *"The job ID is automatically saved to the agent's memory. Next session, the engineer can ask 'what happened to llm-finetune-v3?' and the agent will know job ID 48291 without them remembering it."*
+- *"This is the same VibOps interface the team uses for Kubernetes. Slurm cluster or K8s cluster — same natural language prompt, same audit log, same policy gate. The platform team doesn't run two operations workflows."*
+
+**ROI:**
+- **sbatch error rate:** misconfigured `--nodes`, `--gres`, wrong partition — each failed allocation wastes queue wait + engineer time; avg 45 min per incident × 3/month = **$337/month = $4,050/year** at $75/hr
+- **GPU idle time from misallocation:** requesting wrong node count or wrong partition causes jobs to sit pending instead of running; at $12/hr × 32 GPUs × 2 hr avg delay × 3/month = **$2,304/month**
+- **Audit trail for HPC:** Slurm logs job IDs but not *who* submitted *what* and *why*; VibOps adds org/user attribution to every submission — satisfies security review requirements without additional tooling
+- **SSH access elimination:** every MLOps engineer with Slurm access is an attack surface; VibOps eliminates the need for individual SSH keys on the head node — **reduces privileged access scope**
+
+---
+
+## Scenario 31 — Slurm HPC: monitor training progress and tail logs (~30s)
+
+**Persona: MLOps engineer** — *"My training job is running — I want to check progress without SSH-ing into the cluster."*
+
+**Context:** Job 48291 (llm-finetune-v3) is running on 4 nodes. The engineer wants to check the status and pull the last 50 lines of training logs — from their laptop, via the VibOps console.
+
+---
+
+**Prompt:**
+> *What's the status of my llm-finetune-v3 job? Show me the last 50 lines of logs.*
+
+**Tools triggered:**
+1. `slurm_get_job_status(job_id: 48291, host: gpu.hpc.acme.com)`
+2. `slurm_get_job_output(job_id: 48291, host: gpu.hpc.acme.com, lines: 50)`
+
+**What the agent produces:**
+- *"Job 48291 (llm-finetune-v3) — RUNNING. Node list: gpu-node-[03-06]. Wall time: 01:23:47 / 08:00:00. Exit code: N/A (still running)."*
+- Last 50 lines of training output, e.g.:
+```
+Epoch 12/50: loss=1.847 | acc=0.623 | lr=2.4e-5
+Epoch 12/50: throughput=1,842 tokens/s | grad_norm=0.91
+Epoch 13/50: loss=1.791 | acc=0.641 | lr=2.3e-5
+...
+```
+
+---
+
+**Talking points:**
+- *"No SSH. No `squeue`. No `tail -f`. The engineer opens the VibOps console, types one sentence, and sees live training metrics — from anywhere, including mobile."*
+- *"Compare this to the alternative: SSH key management for every MLOps engineer, head node access, knowing the exact log file path in /var/log/slurm/llm-finetune-v3-48291.out. VibOps handles all of that transparently."*
+- *"The log path is resolved automatically from the job ID. The engineer doesn't need to know the Slurm job output naming convention."*
+- *"This is real-time ops intelligence — you see gradient norm, throughput, and loss trend without leaving the ops platform. Useful for catching diverging runs early and cancelling before wasting more GPU time."*
+
+**ROI:**
+- **SSH overhead per monitoring check:** 3–5 min (open terminal, SSH, navigate to log path, tail) vs 10s (VibOps prompt); at 6 checks/day × 5 MLOps engineers × 250 days = **7,500 checks/year × 4 min saved = 500 hrs/year = $37,500/year**
+- **Early divergence detection:** catching a failed training run at epoch 13 instead of epoch 48 saves ~70% of GPU compute; at $12/hr × 32 GPUs × 6 hr saved = **$2,304 per early catch**; conservative 2 catches/month = **$55,296/year**
+- **Access audit:** every log read is recorded in VibOps audit log — who checked what job, when — satisfying compliance requirements for regulated environments
+
+---
+
+## Scenario 32 — Slurm HPC: cancel a runaway job (~20s, interactive)
+
+**Persona: MLOps engineer / SRE on-call** — *"The training job is diverging — loss is exploding. Cancel it before we burn more GPU budget."*
+
+**Context:** Job 48291 is consuming 32 A100s at $12/hr each = $384/hr. The loss curve is clearly diverging (loss went from 1.8 to 14.3 in 3 epochs). The engineer needs to cancel it immediately.
+
+---
+
+**Prompt:**
+> *Cancel job 48291 on gpu.hpc.acme.com. Loss is diverging — kill it.*
+
+**Tools triggered:**
+1. `slurm_cancel_job(job_id: 48291, host: gpu.hpc.acme.com, dry_run: true)`
+
+**What the agent produces (confirmation gate):**
+- *"This will send SIGTERM to job 48291 (llm-finetune-v3) on 4 nodes. The job will be terminated and the allocation released. Confirm?"*
+
+---
+
+**Follow-up prompt:**
+> *Yes, cancel it.*
+
+**Tools triggered:** `slurm_cancel_job(job_id: 48291, confirmed: true, ...)`
+
+**What the agent produces:**
+- *"Job 48291 cancelled. Signal SIGTERM sent. Allocation for 4 nodes (32 GPUs) released. Estimated cost savings: ~$384/hr × remaining 6h17m = $2,413 recovered."*
+
+---
+
+**Talking points:**
+- *"The confirmation gate matters here — cancelling the wrong job ID on a shared HPC cluster affects other teams. The agent shows you exactly what it's about to do before it does it."*
+- *"Notice the cost estimate in the confirmation. VibOps knows the wall time limit and current runtime — it can calculate the remaining GPU cost and show it inline. This is ops intelligence, not just command execution."*
+- *"On a shared Slurm cluster, 32 A100s blocked by a diverging job are 32 A100s not available to the rest of the team. Speed of cancellation is a team resource issue, not just a personal cost issue."*
+- *"Alternative without VibOps: SSH to head node, run `squeue -u $USER`, find the job ID, run `scancel 48291`, confirm status with `squeue`. Five steps, each requiring Slurm expertise. With VibOps: one sentence."*
+
+**ROI:**
+- **GPU cost recovery from fast cancellation:** cancelling a diverging 32-GPU job 30 min faster than the manual process saves 32 × $12/hr × 0.5 hr = **$192 per incident**; at 3 diverging runs/month = **$6,912/year**
+- **Prevent accidental cancellation:** the dry-run gate prevents `scancel` on the wrong job ID — each misfired cancel on a production job = 2–4 hr re-run + team disruption; at $12/hr × 32 GPUs × 3 hr = **$1,152 per incident avoided**
+- **On-call response time:** an SRE receiving a GPU budget alert at 2am can cancel via VibOps console without SSH credentials to the Slurm head node — eliminates the "I don't have the SSH key on this machine" blocker
+
+---
+
+## Scenario 33 — Connect a Slurm cluster via the console (~2min)
+**Persona: Platform engineer / HPC admin** — *"We have a bare-metal HPC cluster with Slurm. I want to onboard it to VibOps without touching any config files."*
+
+**Context:** The team uses the new gateway form (Sprint B) that exposes `gateway_type` and `slurm_config`. No env vars, no restart required — the form generates a JSONB config stored per-gateway in the DB.
+
+---
+
+**Step 1 — Register the Slurm gateway via the console form:**
+1. Open console → *Connect* tab → *Register gateway*
+2. Name: `hpc-slurm-prod` | Clusters: `gpu-partition`
+3. **Gateway type:** select **Slurm (HPC)**
+4. Slurm section appears:
+   - Host: `slurm.hpc.acme.com` | SSH user: `vibops` | SSH port: `22`
+   - slurmrestd URL: `http://slurmctld:6820` (optional — enables REST transport)
+   - SSH key secret: `slurm-ssh-key` (references VibOps Secrets Vault)
+5. Click *Register gateway* → token shown once → deploy the gateway agent via Helm on the HPC head node
+
+**Step 2 prompt:**
+> *The Slurm gateway just came online. Confirm it's visible and show me the current GPU job queue on gpu-partition.*
+
+**Tools triggered:** `list_gateways` → `slurm_list_jobs(partition: gpu-partition, state: running)`
+
+**What the agent produces:**
+- Gateway `hpc-slurm-prod` online, 1 cluster registered, last ping < 30s ago
+- Running jobs on gpu-partition with job IDs, user, GPU count, start time, partition
+- Summary: *"3 running jobs, 32 GPUs allocated (A100 80GB), 2 jobs pending in queue."*
+
+**Talking points:**
+- *"No YAML. No env var. No restart. A platform engineer fills in a form, deploys one Helm chart, and the Slurm cluster appears in VibOps. 2 minutes vs a full day of connector configuration."*
+- *"The SSH key is referenced by name — `slurm-ssh-key` — the plaintext never leaves the VibOps Secrets Vault. The audit log records who added the gateway and when."*
+- *"Notice the gateway type is 'slurm' — the same VibOps gateway agent works for Kubernetes, Slurm, or hybrid (both on the same node). One binary, multiple cluster types."*
+
+**ROI:**
+- **Onboarding time:** HPC cluster onboarding (manual SSH config, env var management, service restart) → 2 min form fill + Helm deploy
+- **Security surface:** eliminates per-engineer SSH keys on the head node — one gateway credential, audited, revokable
+
+---
+
+## Scenario 34 — Slurm GPU accounting: live tracking + exact end times (~15s)
+**Persona: FinOps / MLOps engineer** — *"I want to see how many GPU-hours each Slurm job consumed, including jobs that finished in the last hour."*
+
+**Context:** The `workloads` table is updated every 60s by the Celery beat task. For running jobs it calls `squeue --json`; for recently completed jobs it queries `sacct --json --starttime=<now-120s>` to capture the exact `end_time` from Slurm accounting — not a poll-time approximation.
+
+---
+
+**Prompt:**
+> *Show me the GPU-hours consumed by each Slurm job on hpc-slurm-prod in the last 24 hours. Which jobs used the most GPU compute?*
+
+**Tools triggered:** `get_workload_gpu_hours(cluster: hpc-slurm-prod, type: slurm_job, hours: 24)` → workloads table query ordered by gpu_seconds_accumulated desc
+
+**What the agent produces:**
+- Ranked table of Slurm jobs: job ID, owner, partition, GPU count, started_at, ended_at (exact from sacct), GPU-hours
+- Total GPU-hours consumed across all jobs in the window
+- Running jobs shown with accumulated GPU-hours so far (updated every 60s)
+- Jobs terminated between polls shown with their sacct exact end time (not rounded to poll boundary)
+
+**Talking points:**
+- *"Each row in this table was written by VibOps every 60 seconds as the job ran. When the job ended, sacct gave us the exact end timestamp — not 'sometime in the last 60 seconds' but the actual Slurm completion time."*
+- *"GPU-hours = gpu_count × runtime. For a 4-GPU job that ran 6 hours: 24 GPU-hours. At $3/hr per A100 = $72 per job. Multiply across 200 jobs/month and you have your chargeback report."*
+- *"The data is already in the DB — no Prometheus query, no SSH at query time. The workload tracking is continuous; the query is instant."*
+
+**ROI:**
+- **Chargeback accuracy:** GPU-hours from sacct exact end times vs poll-boundary approximation → up to 1 min per job → at scale (500 jobs/day) this is 500 GPU-minutes saved in billing precision
+- **Visibility:** teams see their GPU consumption in real-time, not at month-end billing surprise
+- **Zero infrastructure:** no additional timeseries DB, no Slurm accounting export scripts
+
+---
+
+## GPU-F — Per-workload GPU metrics (Workloads sub-tab) (~10s)
+**Persona: MLOps engineer / Platform engineer** — *"I want to see GPU utilization by pod, not just by cluster. Which pod is actually burning the GPU?"*
+
+**Context:** The Workloads sub-tab in FinOps (Sprint 16/17) shows live per-pod GPU metrics from DCGM/ROCm-SMI via Prometheus. Slurm jobs appear in the workloads table (Sprint A/B). The view is unified.
+
+---
+
+**Prompt:**
+> *Show me the top 10 GPU-consuming workloads on vibops-dev right now — which pods are actually using compute vs just holding allocations?*
+
+**Tools triggered:** `get_top_consuming_workloads(cluster: vibops-dev, limit: 10)`
+
+**What the agent produces:**
+- Ranked table: workload name, namespace, type (k8s_pod / slurm_job), GPU util %, memory used MB, power W, cost estimate $/hr
+- Low-utilization workloads (< 20%) highlighted in yellow — candidates for time-slicing
+- Summary: *"llama3 (prod) — 87% util. eval-run-7 (staging) — 3% util, 8GB allocated, 0.3% power: prime candidate for release."*
+
+**Console path:** FinOps tab → Workloads sub-tab → select cluster → live table auto-refreshes
+
+**Talking points:**
+- *"This is the difference between cluster-level and workload-level GPU visibility. Cluster says 60% utilized. Workload view says: prod is at 87%, staging eval is at 3% and has been for 4 hours."*
+- *"The yellow highlight is intentional — it's not a warning, it's an action prompt. Click 'Release GPU' and the agent scales down the staging deployment in the next sentence."*
+- *"For Slurm jobs, the data comes from the workloads table — persistent, historical. For K8s pods, it's live Prometheus. Same UI, two data sources, unified view."*
+
+**ROI:**
+- **Idle GPU identification time:** manual DCGM query + namespace correlation → 10 seconds automatic per cluster
+- **Action loop closed:** identify waste → agent scales down or time-slices → confirmed in same conversation
 
 ---
 

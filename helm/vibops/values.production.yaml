@@ -9,7 +9,7 @@
 #       vaultKey: "..."
 #   agent:
 #     secret:
-#       anthropicApiKey: "sk-ant-..."
+#       llmApiKey: "sk-ant-..."
 
 # ── Replicas & Resources ──────────────────────────────────────────────────────
 core:

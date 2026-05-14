@@ -138,16 +138,16 @@ Find the `LLM_PROVIDER` line and set it to match your chosen provider:
 **Claude (Anthropic):**
 ```
 LLM_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-...
+LLM_API_KEY=sk-ant-...
 ```
 
-**Another provider (OpenAI, Mistral, Azure OpenAI, or any OpenAI-compatible endpoint):**
+**Another provider (OpenAI, Mistral, or any OpenAI-compatible endpoint):**
 ```
 LLM_PROVIDER=openai
-OPENAI_API_KEY=your-api-key
-OPENAI_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=your-api-key
+LLM_BASE_URL=https://api.openai.com/v1
 ```
-Replace `OPENAI_BASE_URL` with your provider's endpoint if it is not OpenAI.
+Replace `LLM_BASE_URL` with your provider's endpoint if it is not OpenAI.
 
 **Ollama (local, no API key):**
 ```
@@ -235,9 +235,14 @@ VibOps manages GPU clusters through a small connector called a **Gateway**.
 2. Click **New Gateway**
 3. Give it a name (e.g. `my-gpu-cluster`)
 4. Click **Register** — a token is shown **once only**, copy it immediately
-5. Run this command on the machine where your GPU cluster runs:
+5. On the machine that has `kubectl` access to your GPU cluster, run:
 
 ```
+# Add the VibOps Helm repo (once per machine)
+helm repo add vibops https://charts.vibops.io
+helm repo update
+
+# Deploy the gateway
 helm upgrade --install vibops-connect vibops/vibops-connect \
   --namespace vibops-connect --create-namespace \
   --set gateway.name="my-gpu-cluster" \
@@ -246,6 +251,15 @@ helm upgrade --install vibops-connect vibops/vibops-connect \
 ```
 
 Once connected, the gateway shows **Online** in the console within 30 seconds.
+
+**To connect a second or third cluster**, repeat from step 1 with a different gateway name.
+
+**If the gateway does not go Online**, check the pod logs:
+```
+kubectl logs -n vibops-connect deployment/vibops-connect
+```
+
+**If a token is compromised**, go to **Settings → Gateways**, delete the gateway and register a new one — the old token is immediately invalidated.
 
 > **No GPU cluster yet?** You can still explore VibOps — the agent can answer questions, run diagnostics, and plan deployments. Connect a cluster when you are ready.
 
@@ -305,7 +319,6 @@ Open `.env` and change these two lines:
 
 ```
 LLM_PROVIDER=ollama
-ANTHROPIC_API_KEY=
 ```
 
 **4. Restart the agent:**
@@ -424,8 +437,8 @@ nano .env
 For an internal LLM endpoint:
 ```
 LLM_PROVIDER=openai
-OPENAI_API_KEY=                            # leave empty if no auth
-OPENAI_BASE_URL=http://your-llm-host:8000/v1
+LLM_API_KEY=                               # leave empty if no auth
+LLM_BASE_URL=http://your-llm-host:8000/v1
 ```
 
 For Ollama running on this same server:
@@ -461,13 +474,20 @@ docker compose restart core
 
 ### Step 7 — Connect GPU cluster gateways
 
-On each GPU cluster (which must be able to reach `INTERNAL_SERVER_IP` on port 8000):
+**Prerequisites on the GPU cluster side:** `kubectl` configured + `helm` installed.
+
+For each GPU cluster:
 
 1. In the console, go to **Settings → Gateways → New Gateway**
 2. Copy the token (shown once only)
-3. On the GPU cluster, run:
+3. From a machine with `kubectl` access to that cluster, run:
 
 ```
+# Add the VibOps Helm repo (once per machine)
+helm repo add vibops https://charts.vibops.io
+helm repo update
+
+# Deploy the gateway
 helm upgrade --install vibops-connect vibops/vibops-connect \
   --namespace vibops-connect --create-namespace \
   --set gateway.name="my-gpu-cluster" \
@@ -478,6 +498,15 @@ helm upgrade --install vibops-connect vibops/vibops-connect \
 The gateway uses **outbound polling only** — no inbound ports needed on the cluster side. The only requirement: the cluster can reach `INTERNAL_SERVER_IP:8000` on the internal network.
 
 Within 30 seconds, the gateway shows **Online** in the console.
+
+**To add more clusters**, repeat from step 1 with a different gateway name (e.g. `gpu-cluster-2`).
+
+**If the gateway does not go Online**, check the pod logs:
+```
+kubectl logs -n vibops-connect deployment/vibops-connect
+```
+
+**If a token is compromised**, delete the gateway in the console and register a new one — the old token is immediately invalidated.
 
 ---
 
@@ -570,12 +599,12 @@ nano .env
 ```
 # Claude
 LLM_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-...
+LLM_API_KEY=sk-ant-...
 
 # Or: OpenAI-compatible
 LLM_PROVIDER=openai
-OPENAI_API_KEY=your-key
-OPENAI_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=your-key
+LLM_BASE_URL=https://api.openai.com/v1
 ```
 
 Save (`Ctrl+O`, `Ctrl+X`), then:
@@ -619,13 +648,20 @@ docker compose restart core
 
 ### Step 8 — Connect GPU cluster gateways
 
-On each GPU cluster (wherever it is, as long as it has outbound internet access):
+**Prerequisites on the GPU cluster side:** `kubectl` configured + `helm` installed.
+
+For each GPU cluster:
 
 1. In the console, go to **Settings → Gateways → New Gateway**
 2. Copy the token (shown once only)
-3. On the GPU cluster, run:
+3. From a machine with `kubectl` access to that cluster, run:
 
 ```
+# Add the VibOps Helm repo (once per machine)
+helm repo add vibops https://charts.vibops.io
+helm repo update
+
+# Deploy the gateway
 helm upgrade --install vibops-connect vibops/vibops-connect \
   --namespace vibops-connect --create-namespace \
   --set gateway.name="my-gpu-cluster" \
@@ -640,6 +676,15 @@ Allow outbound HTTPS (port 443) → your-domain.com or YOUR_PUBLIC_IP
 ```
 
 Within 30 seconds, the gateway shows **Online** in the console.
+
+**To add more clusters**, repeat from step 1 with a different gateway name (e.g. `gpu-cluster-2`).
+
+**If the gateway does not go Online**, check the pod logs:
+```
+kubectl logs -n vibops-connect deployment/vibops-connect
+```
+
+**If a token is compromised**, delete the gateway in the console and register a new one — the old token is immediately invalidated.
 
 ---
 
@@ -666,3 +711,58 @@ make up
 - Full installation guide: [`docs/installation.md`](docs/installation.md)
 - Incident runbook: [`docs/runbooks/incident-response.md`](docs/runbooks/incident-response.md)
 - Support: david@vibops.ai
+
+---
+
+# `.env` variable reference
+
+All variables live in the `.env` file at the root of the `vibops` folder.
+Variables marked **auto-generated** are set by `make quickstart` and do not need to be edited manually.
+
+## Required
+
+| Variable | Auto-generated | Description |
+|---|---|---|
+| `SECRET_KEY` | ✓ | Flask/FastAPI session secret — 64-char hex |
+| `JWT_SECRET_KEY` | ✓ | JWT signing key — 64-char hex |
+| `POSTGRES_PASSWORD` | ✓ | PostgreSQL password |
+| `DATABASE_URL` | ✓ | Full Postgres connection string (interpolated from `POSTGRES_PASSWORD`) |
+| `LLM_PROVIDER` | | `claude` · `openai` · `ollama` |
+| `LLM_API_KEY` | | API key for your LLM provider — not needed for `ollama` |
+
+## Optional but common
+
+| Variable | Default | Description |
+|---|---|---|
+| `VIBOPS_LICENCE_KEY` | _(empty)_ | RS256 JWT licence key — omit for 14-day trial (10 GPUs · 5 users · 2 clusters) |
+| `LLM_BASE_URL` | _(empty)_ | Base URL for OpenAI-compatible endpoints (vLLM, Mistral, on-prem) |
+| `OLLAMA_URL` | `http://ollama:11434` | Ollama endpoint — change to `http://localhost:11434` for local dev |
+| `AUTH_USERNAME` | `admin` | Login username for the console |
+| `AUTH_PASSWORD_HASH` | _(empty)_ | Bcrypt hash — generate with `make hash PASSWORD=yourpassword` |
+| `JWT_EXPIRE_HOURS` | `24` | Token validity in hours |
+| `VAULT_KEY` | _(empty)_ | Fernet key for secret encryption in DB — generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `GRAFANA_PASSWORD` | ✓ | Grafana admin password (observability profile only) |
+
+## Integrations
+
+| Variable | Description |
+|---|---|
+| `GIT_PROVIDER` | `github` or `gitlab` |
+| `GIT_TOKEN` | Personal Access Token — `repo:read` (GitHub) or `read_api` (GitLab) |
+| `GIT_URL` | GitLab base URL — leave empty for github, set to `https://gitlab.example.com` for self-hosted |
+| `GITHUB_WEBHOOK_SECRET` | Shared secret for incoming webhooks |
+| `DATADOG_API_KEY` | Datadog API key — leave empty to disable |
+| `DATADOG_APP_KEY` | Datadog application key |
+| `SMTP_HOST` | SMTP server for alerts and password reset — leave empty to disable |
+| `SMTP_PORT` | SMTP port (default: `587`) |
+| `SMTP_USER` / `SMTP_PASSWORD` | SMTP credentials |
+| `SMTP_FROM` | Sender address (e.g. `noreply@yourcompany.com`) |
+
+## VibOps Connect (gateway)
+
+| Variable | Description |
+|---|---|
+| `CONNECT_GATEWAY_ID` | Gateway ID — generated in the console under Connect → Register gateway |
+| `CONNECT_TOKEN` | Gateway auth token — generated alongside `CONNECT_GATEWAY_ID` |
+
+> For the full variable reference including Helm values, see [`docs/installation.md`](docs/installation.md).

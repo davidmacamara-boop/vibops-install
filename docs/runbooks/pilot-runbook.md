@@ -86,7 +86,7 @@ Le username généré suit le pattern `{slug}-admin`. Transmettre au client :
 
 ## 3. Connecter le cluster GPU du client
 
-Dans la console → **Settings → Gateways → New Gateway** :
+Dans la console → onglet **Fleet** → sous-onglet **Gateways** → **New Gateway** (ou **⚙ Admin → Gateways → New Gateway**) :
 
 1. Nommer le gateway (ex: `acme-gpu-cluster-1`)
 2. Copier le token généré

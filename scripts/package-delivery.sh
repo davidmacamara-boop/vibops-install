@@ -98,10 +98,11 @@ core:
 
 agent:
   secret:
-    # Your own Anthropic API key — https://console.anthropic.com/settings/keys
+    # Your LLM API key — required for LLM_PROVIDER=claude or openai, leave empty for ollama
+    # Claude: get a key at https://console.anthropic.com/settings/keys
     # Anthropic token costs are billed directly to your Anthropic account.
     # VibOps licence fees are invoiced separately by VibOps SAS.
-    anthropicApiKey: "CHANGE_ME_sk-ant-..."
+    llmApiKey: "CHANGE_ME_LLM_API_KEY"
     jwtSecretKey: "CHANGE_ME_JWT_32_CHAR_SECRET_KEY_"   # must match core
 
 postgresql:
@@ -163,7 +164,7 @@ cp values.example.yaml my-values.yaml
 # Edit my-values.yaml:
 #   - Set images.*.repository to your internal registry
 #   - Set core.secret.secretKey and jwtSecretKey (32-char random strings)
-#   - Set agent.secret.anthropicApiKey
+#   - Set agent.secret.llmApiKey
 #   - Set postgresql.auth.password
 #   - Set ingress.host
 #   Store secrets in your Vault / Secrets Manager — do not commit to git

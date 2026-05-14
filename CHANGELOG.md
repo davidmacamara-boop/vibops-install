@@ -9,6 +9,222 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.17.6] — 2026-05-13
+
+### Added
+- **`GET /workloads`** — filtered listing with real-time cost annotation (`cost_usd`, `gpu_hours`, `rate_per_gpu_hour`); optional filters: `cluster_name`, `status`, `namespace`, `workload_type`; pagination (`limit`/`offset`); ordered by `started_at DESC`
+- **`GET /workloads/cost-summary`** — aggregated GPU cost attribution for a cluster: `total_gpu_hours`, `total_cost_usd`, `by_namespace` (namespace for k8s_pod, partition for slurm_job), `top_workloads` (top 10 by cost); `rate_available=false` when no ClusterRate configured
+- **`GET /workloads/{id}`** — single workload detail with cost annotation (404 + org isolation)
+- **Cost formula**: `gpu_hours = gpu_seconds_accumulated / 3600`, `cost_usd = gpu_hours × rate_per_gpu_hour`; computed on-the-fly, never stored — rate changes take effect immediately
+- **Console Workloads sub-tab** — cluster selector, cost attribution table by namespace/partition (workload count, running count, GPU-hours, cost), top spenders list; amber warning when no ClusterRate configured
+- **Agent system prompt** — workload cost attribution intents: `cost-summary` rollup, filtered listing, single detail
+- **CI `publish-install` job** — auto-publishes to vibops-install repo on every push to `main` (gated on `test-core` + `openapi-spec` passing); uses `INSTALL_REPO_TOKEN` secret
+
+### Tests
+- 31 new tests in `test_sprint20_workload_cost.py` (8 unit + 8 list endpoint + 9 cost-summary + 5 detail + 1 auth)
+
+---
+
+## [0.17.5] — 2026-05-12
+
+### Added
+- **`sacct` accounting for terminated Slurm jobs** — `SlurmWorkloadCollector.collect_completed()` queries `sacct` (REST slurmdb API or SSH) for jobs that completed between polls; window = `now - 2×POLL_INTERVAL_S` (120 s) to avoid missed transitions
+- **`finalize_completed_workloads()`** — new DB helper: idempotent UPDATE for Slurm jobs that moved to terminal states; sets `ended_at` and `status` from `sacct` exact timestamps; takes priority over `mark_terminated_workloads()` approximation
+- **`WorkloadSnapshot.ended_at`** — optional `datetime | None` field set by sacct; `None` for Kubernetes and running Slurm jobs
+- **`_sacct_to_snapshots()`** — handles nested TRES format (`tres.allocated: [{"type":"gpu",...}]`) via `_tres_from_nested()`; strips `.batch` job step suffix; maps COMPLETED / FAILED / CANCELLED / TIMEOUT → terminal statuses
+
+### Changed
+- `sync_workloads` Celery task now calls `collect_completed(since=now-120s)` after `collect()` for Slurm gateways; DB write order: `upsert_workloads` → `finalize_completed_workloads` → `mark_terminated_workloads`
+- Console gateway form fully wired: gateway_type select, prometheus_url field (K8s/hybrid), Slurm section (host/user/port/REST URL/SSH key secret) — all conditionally shown via Alpine.js
+
+### Tests
+- 10 new tests in `TestSacctParsing` + 5 in `TestFinalizeCompletedWorkloads` — 51 tests in `test_sprint19_slurm_workload_collector.py`
+
+---
+
+## [0.17.4] — 2026-05-12
+
+### Added
+- **`SlurmWorkloadCollector`** — full workload collector for Slurm clusters: REST (slurmrestd `v0.0.38`) → SSH+JSON (`squeue --json`) transport hierarchy; no text parsing
+- **`SlurmGatewayConfig`** dataclass with `from_dict()` — validates `host` + `ssh_user` required; optional `ssh_port`, `rest_url`, `ssh_key_secret`, `rest_jwt_secret`
+- **`parse_alloc_gres()`** — regex-based AllocGRES parser handles `gpu:2`, `gpu:tesla:2`, `gpu:nvidia_a100_80gb:4`, multi-type (`gpu:a100:2,gpu:v100:1` → summed); CPU-only → 0
+- **`gateway_type`** column on `gateways` table (`String(32)`, server_default=`kubernetes`); values: `kubernetes` | `slurm` | `hybrid`
+- **`slurm_config`** JSONB column on `gateways` table — stores host, ssh_user, ports, REST URL, secret names; CHECK constraint enforces host+ssh_user when type=slurm
+- **Hybrid gateways** — `gateway_type="hybrid"` runs both `KubernetesWorkloadCollector` and `SlurmWorkloadCollector`; snapshots merged before upsert
+- **`_fetch_secret()`** in `workload_tasks.py` — resolves SSH key PEM and JWT from VibOps secrets store for Slurm transport
+- **`_build_collectors()`** takes plain values (not ORM objects) to avoid `DetachedInstanceError` / `MissingGreenlet` after `session.commit()`
+- **Console gateway form** — gateway_type select, prometheus_url (K8s/hybrid), Slurm section with host/user/port/REST URL/SSH key secret fields; register button disabled when slurm type and host empty
+- **ADR 0024** — Slurm workload collector: transport hierarchy, AllocGRES parsing, SSH key management, hybrid gateways, detached-instance guard
+
+### Migrations
+- `d5e6f7a8b9c0_add_gateway_type_slurm_config.py` — adds `gateway_type` + `slurm_config` to `gateways`
+
+### Tests
+- 36 new tests (Classes A–E in `test_sprint19_slurm_workload_collector.py`): `TestParseAllocGres`, `TestSlurmGatewayConfig`, `TestJobsToSnapshots`, `TestSlurmWorkloadCollector`, `TestGatewayApiSlurmFields`
+
+---
+
+## [0.17.3] — 2026-05-12
+
+### Added
+- **Workload persistence** — `workloads` table with `upsert_workloads()` and `mark_terminated_workloads()`; shadow-write alongside existing Prometheus live-query path
+- **`KubernetesWorkloadCollector`** — polls Prometheus for running GPU workloads; emits `WorkloadSnapshot` objects (external_id, workload_type, namespace, gpu_count, started_at, status)
+- **`WorkloadSnapshot`** dataclass — canonical workload representation shared by K8s and Slurm collectors
+- **`sync_workloads`** Celery Beat task (60 s interval) — discovers gateways, dispatches to collectors, upserts to DB, marks terminated
+- **`GET /api/v1/workloads`** — lists workloads with filters (`status`, `cluster_name`, `namespace`, `workload_type`) and pagination
+- **`GET /api/v1/workloads/{id}`** — single workload detail
+- Console **Workloads sub-tab** in FinOps: live table with status badges, GPU count, duration, namespace filter
+
+### Migrations
+- `c4d5e6f7a8b9_add_workloads_table.py` — creates `workloads` table with indexes on `(org_id, cluster_name, status)` and `(external_id, workload_type)`
+
+### Tests
+- Sprint A test suite (workloads table + K8s collector + API endpoints + console proxy)
+
+---
+
+## [0.17.2] — 2026-05-11
+
+### Changed
+- **Per-workload abstraction** — `PodGpuMetric` renamed to `WorkloadGpuMetric` with `workload_id` + `workload_type` fields, establishing a clean abstraction for both Kubernetes pods (`workload_type="k8s_pod"`) and future Slurm jobs (`workload_type="slurm_job"`). Done before client integration to avoid a breaking change later.
+- **Canonical endpoint** `GET /clusters/{name}/workloads/{ns}/{id}/gpu-metrics` replaces `/pods/` path. The `/pods/` alias is kept with a `Deprecation` response header.
+- **Top workloads endpoint** now returns `workloads` key (was `pods`). The internal compat wrapper `get_top_consuming_pods()` still exists for any early callers.
+- **Console** — FinOps "Pods" sub-tab renamed to "Workloads"; table shows `workload_id` and `workload_type` columns.
+- **Fixed** `NameError: pods_out` in `get_top_consuming_workloads()` — variable was renamed but one reference was missed.
+
+### Backwards compatibility
+- `PodGpuMetric = WorkloadGpuMetric` alias preserved.
+- `get_pod_gpu_metrics()` and `get_top_consuming_pods()` remain as compat wrappers.
+- `GET /clusters/{name}/pods/{ns}/{pod}/gpu-metrics` still returns 200 with `Deprecation` header.
+
+---
+
+## [0.17.1] — 2026-05-12
+
+### Added
+- **Budget alert notifications** — when a soft or hard cap threshold is crossed, VibOps now dispatches a notification via all active channels (Slack, email, PagerDuty) for the org. Previously, `BudgetAlert` records were written to the DB but never dispatched.
+- **Budget check after job completion** — `job_tasks.py` now calls `check_budget()` after a job transitions to SUCCESS with its computed `actual_cost_usd`. This closes the alerting loop: job completes → cost recorded → alert fired → notification sent.
+- `BudgetService._dispatch_budget_notification()` — new internal helper that formats title/message/severity and delegates to `ChannelService.notify_alert_via_channels()`. Non-fatal: if the channel call fails, the `BudgetAlert` DB record is already persisted.
+- `_check_budget_after_job(org_id, cost_usd)` async helper in `job_tasks.py` — uses a dedicated `AsyncSession` (same pattern as `_resolve_secrets`) to avoid interfering with the Celery sync DB context.
+
+### Fixed
+- Budget alerts were silently stored in DB but never triggered Slack/email/PagerDuty notifications.
+- Job completion did not update the budget spend counter — alerts could never fire from completed jobs.
+
+---
+
+## [0.17.0] — 2026-05-11
+
+### Added
+- **Per-pod GPU metrics** via on-demand Prometheus queries (DCGM Exporter / ROCm-SMI Exporter):
+  - `GET /clusters/{name}/pods/{ns}/{pod}/gpu-metrics` — per-GPU util%, memory, power for a single pod
+  - `GET /clusters/{name}/namespaces/{ns}/gpu-metrics` — per-pod aggregated summary for a namespace, sorted by util%
+  - `GET /clusters/{name}/gpu-metrics/top` — top N pods by GPU utilisation across a cluster (`?limit=1–100`, `?namespace=` filter)
+  - NVIDIA: DCGM_FI_DEV_GPU_UTIL, DCGM_FI_DEV_FB_USED, DCGM_FI_DEV_POWER_USAGE
+  - AMD: rocm_smi_gpu_use_percent, rocm_smi_memory_used_vram_bytes (power not available)
+  - NVIDIA + AMD queried concurrently via `asyncio.gather`; graceful `prometheus_available=false` when not configured
+- **`prometheus_url`** field on Gateway model and API schema; resolved in priority: gateway field → `PROMETHEUS_URL` env var → None
+- **`pod_breakdown`** JSON column on `ChargebackReport`: per-pod cost attribution when `pod_name` is present in job payload
+- **FinOps waste endpoint enrichment**: `pod_level_available` + `pod_metrics` (low-util pods < 20%) per idle cluster
+- **Console — Pods sub-tab** in FinOps: cluster selector, ranked GPU pod table, low-utilisation rows highlighted in amber
+- **Agent system prompt**: per-pod GPU metric intents (`get_top_consuming_pods`, `get_pod_gpu_metrics`, `get_namespace_gpu_aggregated`)
+- 34 new tests across 4 classes (service unit, endpoint integration, chargeback pod_breakdown, security invariants) — 689 total
+
+### Changed
+- `ChargebackReportResponse` now includes `pod_breakdown` field (null for reports generated before this migration)
+
+---
+
+## [0.16.4] — 2026-05-10
+
+### Added
+- **`SlurmConnector`** — 6 actions for multi-node HPC training on bare-metal Slurm clusters (no Kubernetes required):
+  - `slurm_get_cluster_info` — `sinfo`: partitions, node states, GPU availability per node
+  - `slurm_list_jobs` — `squeue`: running and pending jobs with TRES, user, time limit
+  - `slurm_submit_job` — `sbatch`: generates sbatch script from payload, dry-run preview gate before submission; returns `job_id`
+  - `slurm_cancel_job` — `scancel` with configurable signal; destructive, requires confirmation
+  - `slurm_get_job_status` — `squeue` (running) + `sacct` fallback (finished/failed)
+  - `slurm_get_job_output` — `tail -n N` on job stdout log via SSH
+- **Transport auto-detection**: probes slurmrestd REST API (3s timeout), falls back to SSH; result cached per connector instance
+- **SSH key from Vault**: `ssh_key=@secret:slurm_ssh_key` — PEM content written to a `0o600` temp file for the SSH call duration, deleted in `finally`; Vault resolution in `job_tasks.py` before connector call
+- **Demo mode** (`SLURM_DEMO_MODE=true`): realistic canned responses for all 6 actions — 8× A100 node cluster, active job queue, training log output — no real cluster or SSH key required; enabled by default in `docker-compose.yml`
+- **Agent**: 6 Slurm tools in `TOOLS`, routed via `_RUN_JOB_TOOLS` / `_CREATE_JOB_TOOLS`
+- **MCP server**: 6 Slurm tools registered (action tools: 8 → 14)
+- **WorkloadClassifier**: `slurm_submit_job` → `training`, `slurm_cancel_job` → `operations`, read actions → `observation`
+- **System prompt**: Slurm HPC workflow with mandatory `slurm_get_cluster_info` pre-check, Vault SSH key pattern, `save_memory` after submit
+- **Console**: Slurm metadata card in job detail panel (job ID, partition, nodes, GPUs/node, wall time)
+- **`_format_job()`**: extracts `job_name` label and `slurm_job_id` for Slurm jobs
+- Connector count: 25 → **26**
+- 40 connector tests (`test_slurm_connector.py`)
+
+### Documentation
+- **Scenarios 30–32** in `docs/demo-scenarios.md` — multi-node training submission, log monitoring, runaway job cancel with GPU budget recovery ROI
+- Header updated: 29 → 32 scenarios; HPC/MLOps engineer persona added
+
+---
+
+## [0.16.3] — 2026-05-08
+
+### Added
+- **`k3s_load_image`** (DockerBuildConnector) — `docker save <image> | k3s ctr images import -`; completes local cluster coverage (kind/k3d/minikube/k3s)
+- **`create_ecr_pull_secret`** (KubectlConnector) — fetches ECR token via `aws ecr get-login-password`, creates pull secret; tokens valid 12h
+- **`create_gcr_pull_secret`** (KubectlConnector) — GCP service account JSON key → Kubernetes pull secret
+- **`create_acr_pull_secret`** (KubectlConnector) — Azure service principal / ACR admin credentials → Kubernetes pull secret
+- **`argocd_enable_auto_sync`** (ArgoCDConnector) — enables `syncPolicy.automated` via ArgoCD API (GET → patch → PUT); options: `prune`, `self_heal`
+- **`argocd_disable_auto_sync`** (ArgoCDConnector) — removes `syncPolicy.automated`
+- **`openshift_add_scc`** (KubectlConnector) — `oc adm policy add-scc-to-user`; falls back to kubectl if `oc` absent
+- **`openshift_create_route`** (KubectlConnector) — `oc expose service` with optional hostname
+- `system_prompt.md` routing rules for all new actions (cloud pull secrets, ArgoCD auto-sync, OpenShift)
+
+### Documentation
+- **Scenario 27** — ArgoCD auto-sync: GitOps loop closure via one prompt; ROI: $9,975/year manual sync overhead + $2,256–$3,384/year missed sync incidents
+- **Scenario 28** — Cloud registry deploy (ECR/GCR/ACR): unified pull secret interface across AWS/GCP/Azure; ROI: $15,625/year ECR token refresh overhead
+- **Scenario 29** — OpenShift deploy: SCC + Route in same prompt as deploy; ROI: $19,500–$39,000/year platform team ticket overhead
+- `README.md` GitOps section updated: ArgoCD auto-sync flow, cloud registry patterns, OpenShift flow
+- `docs/demo-scenarios.md`: 26 → 29 scenarios
+
+---
+
+## [0.16.2] — 2026-05-07
+
+### Added
+- **`create_pull_secret`** (KubectlConnector) — creates or updates a Kubernetes docker-registry pull secret; idempotent (`--dry-run=client -o yaml | kubectl apply`); works on EKS, GKE, AKS, RKE2, bare metal, and local clusters
+- **`deploy_webapp`** updated — new `image_pull_secret` param; patches Deployment with `imagePullSecrets` spec after creation
+- **`kind_load_image`** — loads a locally built Docker image into a kind cluster's containerd runtime (`kind load docker-image`)
+- **`k3d_load_image`** — loads a locally built image into a k3d cluster (`k3d image import`)
+- **`minikube_load_image`** — loads a locally built image into a minikube cluster (`minikube image load [-p <profile>]`)
+- **Scenario 26** in `docs/demo-scenarios.md` — private registry deploy on K8s: `create_pull_secret` → `deploy_webapp(image_pull_secret=...)`, with ROI
+
+### Tests
+- 3 kubectl chain tests (`test_kubectl_connector.py`): full `create_pull_secret` → `deploy_webapp` sequence, failure-blocks-deploy, patch failure propagation
+- 10 new connector tests for `k3d_load_image` and `minikube_load_image`
+
+### Documentation
+- `README.md` — GitOps section updated with private registry K8s deploy flow and local cluster load patterns
+- `system_prompt.md` — routing rules for all local cluster patterns (kind/k3d/minikube) and production private registry pattern
+
+---
+
+## [0.16.1] — 2026-05-07
+
+### Added
+- **`DockerBuildConnector`** — 4 actions: `docker_build` (600s timeout, layer streaming), `docker_tag` (30s), `docker_push` (login via `--password-stdin`, token masked in logs, digest returned), `docker_build_push` (combined)
+- **`CIConnector`** — 4 actions: `ci_trigger` (GitHub Actions dispatch + run_id polling; GitLab pipeline trigger), `ci_status` (normalized status across providers), `ci_wait` (5s polling, 900s timeout), `registry_list_tags` (OCI v2 Bearer auth)
+- CI connector reuses `GIT_TOKEN` / `GIT_PROVIDER` — no new credential (ADR 0022)
+- `triggered_by=vibops` injected in every pipeline trigger
+- **Admin → Git panel** — org-level PAT config + apps table with inline repo linking/unlinking/editing (22 frontend tests)
+- **Admin → CI panel** — provider status card with per-provider scope hints + pipeline runs table with 7 columns (22 frontend tests)
+- **ADR 0022** — CI connector: GitHub dispatch + GitLab pipeline, token reuse strategy, Admin → CI panel design
+- **ADR 0021** updated — status Accepted/implemented; docker_build tools shipped; CI items → ADR 0022
+- Connector count: 23 → **25**
+
+### Tests
+- 40 new connector tests (`test_docker_build_connector.py`)
+- 37 new connector tests (`test_ci_connector.py`)
+- 44 new frontend tests (`TestAdminGit` + `TestAdminCI`)
+
+---
+
 ## [0.15.1] — 2026-05-05
 
 ### Security

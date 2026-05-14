@@ -88,7 +88,7 @@ core:
 
 agent:
   secret:
-    anthropicApiKey: "sk-ant-..."
+    llmApiKey: "sk-ant-..."
     jwtSecretKey: "SHARED_SECRET_SAME_IN_ALL_REGIONS"
 ```
 

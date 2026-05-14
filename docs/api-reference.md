@@ -1,6 +1,6 @@
 # VibOps — API Reference
 
-_Last updated: 2026-05-03 · v0.15.0-sprint15_
+_Last updated: 2026-05-12 · v0.17.5_
 
 This document covers the **key endpoints** for integration and technical qualification. It is
 organized by functional domain, with curl examples for each operation.
@@ -281,18 +281,41 @@ Response:
 
 Registers a new gateway. Returns the bearer token (shown **once** — store it immediately).
 
+`gateway_type` values: `kubernetes` (default) | `slurm` | `hybrid`
+
+`slurm_config` is required when `gateway_type` is `slurm` or `hybrid`.
+
 ```bash
 curl -s -X POST https://<host>/api/v1/gateways \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "prod-vpc", "description": "Production VPC gateway"}' | jq .
+  -d '{
+    "name": "prod-hpc",
+    "description": "Production HPC gateway",
+    "gateway_type": "slurm",
+    "slurm_config": {
+      "host": "gpu.hpc.acme.com",
+      "ssh_user": "slurm",
+      "ssh_port": 22,
+      "rest_url": "http://gpu.hpc.acme.com:6820",
+      "ssh_key_secret": "slurm_ssh_key"
+    }
+  }' | jq .
 ```
 
 Response:
 ```json
 {
   "id": "gw-abc123",
-  "name": "prod-vpc",
+  "name": "prod-hpc",
+  "gateway_type": "slurm",
+  "slurm_config": {
+    "host": "gpu.hpc.acme.com",
+    "ssh_user": "slurm",
+    "ssh_port": 22,
+    "rest_url": "http://gpu.hpc.acme.com:6820",
+    "ssh_key_secret": "***"
+  },
   "token": "gw-tk-xxxxxxxxxxxxxxxx"
 }
 ```
@@ -300,6 +323,93 @@ Response:
 ### `DELETE /api/v1/gateways/{gateway_id}`
 
 Revokes a gateway token. The gateway will no longer be able to poll for jobs.
+
+---
+
+## Workloads
+
+The workloads API provides access to the persistent GPU workload tracking table (`workloads`), populated every 60 seconds by `KubernetesWorkloadCollector` (DCGM/ROCm-SMI via Prometheus) and `SlurmWorkloadCollector` (squeue + sacct). Available since v0.17.3.
+
+### `GET /api/v1/clusters/{cluster_name}/workloads/{namespace}/{workload_id}/gpu-metrics`
+
+Returns GPU metrics (utilisation, memory, power, accumulated GPU-seconds) for a specific workload.
+
+Query params: none required.
+
+```bash
+curl -s "https://<host>/api/v1/clusters/prod-hpc/workloads/ml-team/job-4829/gpu-metrics" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Response:
+```json
+{
+  "workload_id": "job-4829",
+  "workload_type": "slurm_job",
+  "namespace": "ml-team",
+  "status": "running",
+  "gpu_util_pct": 87.4,
+  "gpu_memory_mb": 40960,
+  "power_w": 312.5,
+  "gpu_seconds": 14400,
+  "started_at": "2026-05-12T08:00:00Z",
+  "ended_at": null
+}
+```
+
+`workload_type`: `k8s_pod` | `slurm_job`
+
+### `GET /api/v1/clusters/{cluster_name}/namespaces/{namespace}/gpu-metrics`
+
+Returns aggregated GPU metrics for all workloads in a namespace (or Slurm partition).
+
+Query params:
+- `status` — filter by workload status: `running` | `completed` | `terminated` (optional)
+- `limit` — max results (default: 50)
+
+```bash
+curl -s "https://<host>/api/v1/clusters/prod-gpu/namespaces/ml-team/gpu-metrics?status=running" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Response:
+```json
+{
+  "namespace": "ml-team",
+  "workload_count": 12,
+  "total_gpu_util_pct": 73.2,
+  "total_gpu_memory_mb": 491520,
+  "total_power_w": 3750,
+  "workloads": [...]
+}
+```
+
+### `GET /api/v1/clusters/{cluster_name}/gpu-metrics/top`
+
+Returns the top N workloads by GPU utilisation across all namespaces in a cluster.
+
+Query params:
+- `limit` — number of results (default: 10, max: 100)
+- `workload_type` — filter by `k8s_pod` or `slurm_job` (optional)
+
+```bash
+curl -s "https://<host>/api/v1/clusters/prod-gpu/gpu-metrics/top?limit=10" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Response:
+```json
+[
+  {
+    "workload_id": "llm-inference-7b-6d4f9",
+    "workload_type": "k8s_pod",
+    "namespace": "prod",
+    "gpu_util_pct": 94.1,
+    "gpu_memory_mb": 32768,
+    "gpu_seconds": 86400
+  }
+]
+```
 
 ---
 

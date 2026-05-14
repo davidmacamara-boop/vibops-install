@@ -22,13 +22,14 @@
 7. [Kubernetes cluster management](#7-kubernetes-cluster-management)
 8. [Inference workloads and GPU](#8-inference-workloads-and-gpu)
 9. [MLOps workflows](#9-mlops-workflows)
+   - [Slurm HPC training (bare-metal clusters)](#slurm-hpc-training-bare-metal-clusters)
 10. [Incident diagnosis and remediation](#10-incident-diagnosis-and-remediation)
 11. [Capacity planning and benchmarking](#11-capacity-planning-and-benchmarking)
 12. [SLOs and alerts](#12-slos-and-alerts)
 13. [GitOps](#13-gitops)
 14. [Dashboard tab](#14-dashboard-tab)
 15. [Cluster tab](#15-cluster-tab)
-16. [Monitoring tab](#16-monitoring-tab)
+16. [Fleet tab](#16-fleet-tab)
 17. [Admin tab](#17-admin-tab)
     - [Organization](#organization)
     - [Teams](#teams)
@@ -46,6 +47,7 @@
     - [Budget](#budget-sub-tab)
     - [Chargeback](#chargeback-sub-tab)
     - [Alerts](#alerts-sub-tab)
+    - [Workloads — per-workload GPU metrics](#workloads-sub-tab--per-workload-gpu-metrics)
 20. [Dataset & RLHF](#20-dataset--rlhf)
 21. [MCP Server](#21-mcp-server)
 22. [Quick reference](#22-quick-reference)
@@ -130,6 +132,9 @@ Secrets allow the agent to act on your behalf on third-party services — withou
 | Clone/push Git repos (GitHub) | `git_token` | GitHub Personal Access Token (scopes: `repo`, `workflow`) |
 | Clone/push Git repos (GitLab) | `git_token` | GitLab Personal Access Token (scope: `read_api`) |
 | Deploy NVIDIA NIMs | `ngc_api_key` | NGC API key (`ngc.nvidia.com` → Setup → API Key) |
+| Push images to GHCR | `ghcr_token` | GitHub PAT with `write:packages` scope |
+| Push images to Docker Hub | `dockerhub_token` | Docker Hub access token |
+| Push images to GitLab Registry | `gitlab_registry_token` | GitLab PAT with `write_registry` scope |
 | Access a private Docker registry | `registry_password` | Registry password or token |
 
 **How to create a secret:**
@@ -147,31 +152,28 @@ Clone the repo github.com/myorg/infra with token=@secret:git_token
 
 ### Step 4 — Connect your Git provider (for GitOps)
 
-If you want the agent to clone repos, push commits, and open Pull Requests:
+Git access in VibOps operates at two levels:
 
-**GitHub — Create a Personal Access Token:**
-1. Go to [github.com](https://github.com) → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
-2. Click **Generate new token (classic)**
-3. Give it a name (e.g. `vibops-prod`)
-4. Check the scopes: **`repo`** (required) + **`workflow`** (if you use GitHub Actions)
-5. Click **Generate token** → copy the value (`ghp_...`)
+- **Admin → Git** (org-level) — one token for the entire organization. Used by the agent to clone repos, push commits, open PRs, and build/push Docker images. Configured once by an admin.
+- **Git tab** (per-app) — links each application in your sidebar to its source repository. Enables commit history and rollback.
 
-**GitLab — Create a Personal Access Token:**
-1. Go to your GitLab instance → **User settings** → **Access tokens**
-2. Give it a name (e.g. `vibops-prod`)
-3. Check the scope: **`read_api`** (minimum) + **`write_repository`** (if you push commits)
-4. Click **Create personal access token** → copy the value (`glpat-...`)
+**Step 4a — Configure the org-level Git token:**
 
-**Register the token in VibOps:**
-1. Admin → **Secrets** → **+ New secret**
-2. Name: `git_token` / Value: paste the token
-3. Click **Create**
+1. Admin → **Git** sub-tab
+2. Select your provider: **GitHub** or **GitLab**
+3. Paste your Personal Access Token:
+   - GitHub: `ghp_...` — requires scopes `repo` + `workflow` + `write:packages` (if you push images to GHCR)
+   - GitLab: `glpat-...` — requires scopes `read_api` + `write_repository`
+   - Self-hosted GitLab: also fill in **GitLab URL** (e.g. `https://gitlab.mycompany.com`)
+4. Click **Save** — the status badge turns **Connected ✓**
 
-**Declare the integration:**
-1. Admin → **Integrations** → click the **Git Provider** tile
-2. Select your provider (`github` or `gitlab`)
-3. Enter the token; for self-hosted GitLab, also fill in the **GitLab URL**
-4. Click **Save**
+**Step 4b — Link your apps to their repos:**
+
+In the same Admin → Git panel, the **Apps & repositories** table lists all applications discovered on your cluster. For each app:
+- If already linked: the repo URL is shown with branch and last commit SHA.
+- If not linked: click **Link repo** → type `owner/repo` (e.g. `acme/api-server`) → press Enter or click Save.
+
+You can also link an app directly from the **Git** main tab: select the app in the sidebar and use the inline form that appears when no repo is linked.
 
 **Test:**
 ```
@@ -260,8 +262,8 @@ Are there any GPUs available on my clusters?
 ```
 ☐ Login OK + password changed
 ☐ At least one cluster connected (gateway online)
-☐ git_token secret created (if GitOps)
-☐ Git provider integration configured (if GitOps)
+☐ Git token configured in Admin → Git (if GitOps or image builds)
+☐ Apps linked to their repos in Admin → Git → Apps & repositories (if GitOps)
 ☐ ngc_api_key secret created (if NVIDIA NIM)
 ☐ Teams created and users invited (if admin)
 ☐ Notification channel created (Slack or email)
@@ -293,36 +295,45 @@ See section [4 — The Morning Brief](#4-the-morning-brief) for details.
 ## 4. Console overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  [Dashboard] [Cluster] [Monitoring] [Git]  [⚙ Admin]  [FR/EN]  │
-├──────────────────────┬──────────────────────────────────────────┤
-│                      │                                          │
-│   Sidebar            │   Main area                              │
-│   (applications)     │   (active tab)                           │
-│                      │                                          │
-│                      ├──────────────────────────────────────────┤
-│                      │   Chat panel (resizable)                 │
-└──────────────────────┴──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  VibOps / AI Infrastructure Console  | ● prod-gpu  ● eu-h100   [FR/EN]  [⚙]    │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│  [Dashboard] [Fleet ●] | [Git] [Cluster] [LLM] [NIM] | [Automations] | [FinOps] │
+├──────────────────────┬───────────────────────────────────────────────────────────┤
+│                      │                                                            │
+│   Sidebar            │   Main area                                                │
+│   (applications)     │   (active tab)                                             │
+│                      │                                                            │
+│                      ├───────────────────────────────────────────────────────────┤
+│                      │   Chat panel  [Auto] [prod-gpu ⬡3/8] [eu-h100 ⬡0/4]     │
+└──────────────────────┴───────────────────────────────────────────────────────────┘
 ```
 
 ### Navigation bar
 
-- **Dashboard** — real-time view of the infrastructure (jobs, deployments, health)
-- **Cluster** — CPU / RAM / GPU resources of the selected cluster
-- **Monitoring** — live GPU metrics (temperature, utilization, VRAM, power)
-- **Git** — GitOps status of the selected application
+- **Dashboard** — real-time view of the infrastructure (jobs, deployments, recent activity)
+- **Fleet** — multi-cluster overview: all connected sites, GPU metrics per cluster, cross-cluster actions, and gateway health. This is the primary entry point for multi-cluster / multi-site management.
+- **Git** — GitOps status of the selected application: commit history, branch, rollback, inline repo linking
+- **Cluster** — CPU / RAM / GPU resources of the active cluster
+- **LLM / NIM** — inference workload management
+- **Automations** — trigger rules and pipelines
+- **FinOps** — waste, budget, chargeback
 - **⚙ Admin** — administration panel (visible to `org_admin` only)
 - **Language selector** — FR / EN / ES / DE / IT / PT / JA / ZH
 
 A **red badge** on the ⚙ icon indicates the license expires in 7 days or less, or has expired.
 
+### Cluster switcher (header)
+
+The header shows a **pill for each connected cluster** (e.g. `● prod-gpu ⬡3/8 GPU`). Clicking a pill targets that cluster in the chat. If no cluster is connected yet, a `+ connect cluster` button opens the Admin panel directly.
+
 ### Sidebar
 
 Lists all applications discovered on the cluster. Clicking an application selects it as the active context for chat and tabs.
 
-### Cluster selector
+### Chat panel cluster selector
 
-At the top of the main area: dropdown menu to switch between the Kubernetes clusters you have access to. Changing the cluster automatically updates the sidebar, the Dashboard, and the Cluster tab.
+At the bottom of the chat panel: pill buttons to target a specific cluster (`prod-gpu`, `eu-h100`…) or leave it on **Auto** (the agent picks the right cluster from context). The selected cluster is shown in the chat input placeholder.
 
 ### Chat panel
 
@@ -391,6 +402,9 @@ What has changed on our clusters in the last 2 hours?
 | **Incident** | Diagnose, correlate logs + events + metrics, remediate |
 | **Capacity** | Benchmark, plan capacity, detect underutilized GPUs |
 | **GitOps** | Clone, patch YAML, commit, open PRs |
+| **Image build** | Build Docker images, push to GHCR / Docker Hub / GitLab Registry, full git→build→deploy pipeline |
+| **CI/CD** | Trigger GitHub Actions / GitLab CI pipelines, wait for result, list registry tags |
+| **Slurm HPC** | Submit multi-node GPU training jobs on bare-metal Slurm clusters, monitor progress, tail logs, cancel jobs |
 | **SLO & alerts** | Define SLOs, create triggers, configure Slack alerts |
 | **Audit** | View the full history of all operations with who/what/when |
 
@@ -627,6 +641,90 @@ Scale to 5 replicas and confirm they are all Running.
 Traffic has dropped. Scale llama3 in prod to 2 replicas.
 ```
 
+### Slurm HPC training (bare-metal clusters)
+
+For organizations running multi-node GPU training on bare-metal Slurm clusters (not Kubernetes), VibOps connects via SSH or the slurmrestd REST API.
+
+#### Cluster discovery and queue inspection
+
+```
+Check the GPU capacity on our Slurm cluster at gpu.hpc.acme.com —
+how many A100 nodes are available and what is the current queue?
+```
+
+The agent calls `slurm_get_cluster_info` and `slurm_list_jobs` in parallel and returns partition availability, node states, running and pending jobs.
+
+#### Submitting a multi-node training job
+
+```
+Submit a training job on the gpu partition: 4 nodes, 8 GPUs per node,
+run train.py with batch_size=512, epochs=50.
+Job name: llm-finetune-v3. Use ssh_key=@secret:slurm_ssh_key.
+```
+
+The agent:
+1. Generates the sbatch script and shows it as a dry-run preview
+2. Waits for explicit confirmation before submitting
+3. Returns the Slurm job ID and saves it to memory (`slurm_job:llm-finetune-v3`)
+
+The SSH key is resolved from the VibOps Vault — it is never stored in chat history or on disk permanently.
+
+#### Monitoring a running job
+
+```
+What is the status of my llm-finetune-v3 job? Show me the last 50 lines of logs.
+```
+
+The agent calls `slurm_get_job_status` and `slurm_get_job_output` without requiring SSH access from the engineer's machine.
+
+#### Cancelling a job
+
+```
+Cancel job 48291. Loss is diverging.
+```
+
+The agent shows a confirmation gate (job ID, node count, estimated GPU cost remaining) before sending `scancel`.
+
+#### SSH key configuration
+
+Store the Slurm SSH private key in the VibOps Vault:
+
+1. **Admin → Secrets → New secret**
+   - Name: `slurm_ssh_key`
+   - Value: PEM content of the private key (the full `-----BEGIN ... -----END ...` block)
+
+2. Reference it in any Slurm prompt: `ssh_key=@secret:slurm_ssh_key`
+
+The key is written to a temporary file with `chmod 600` for the duration of the SSH call, then deleted.
+
+#### Connecting a Slurm cluster via the console form (v0.17.4+)
+
+Since v0.17.4, Slurm cluster configuration is managed directly from the gateway registration form — no environment variables required.
+
+In **Admin → Gateways → New Gateway** (or edit an existing gateway):
+
+1. Set **Gateway type** to `slurm` (or `hybrid` for clusters running both Kubernetes and Slurm)
+2. Fill in the **Slurm config** fields that appear conditionally:
+   - **Host** — Slurm head node hostname (e.g. `gpu.hpc.acme.com`)
+   - **SSH user** — SSH username (default: `slurm`)
+   - **SSH port** — optional, default 22
+   - **REST URL** — slurmrestd base URL (e.g. `http://gpu.hpc.acme.com:6820`); if set, REST is preferred over SSH
+   - **SSH key secret** — name of the VibOps Vault secret holding the private key (e.g. `slurm_ssh_key`)
+3. For Kubernetes metrics, the **Prometheus URL** field remains available when `gateway_type` is `kubernetes` or `hybrid`
+
+The `gateway_type` and `slurm_config` fields are exposed in the API (`GatewayCreate` / `GatewayOut`). Secret names are masked (`***`) in API responses.
+
+> **Slurm version requirement:** Slurm ≥ 21.08 is required. VibOps uses structured JSON output (`squeue --json`, `sacct --json`) — text parsing is not supported.
+
+#### GPU job tracking (workloads table)
+
+Since v0.17.3, Slurm jobs are tracked persistently in the `workloads` table:
+
+- **Every 60 seconds**, `SlurmWorkloadCollector` polls `squeue` (via REST or SSH) and upserts running jobs into the `workloads` table — accumulating GPU-seconds for FinOps chargeback
+- **After each poll**, `sacct` is called to finalize recently completed jobs (`collect_completed`), setting exact `ended_at` timestamps from Slurm accounting records
+- GPU allocation is parsed from GRES strings: `gpu:2`, `gpu:tesla:2`, `gpu:a100:2,gpu:v100:1` (multi-type supported)
+- For `hybrid` gateways, both `KubernetesWorkloadCollector` and `SlurmWorkloadCollector` run in parallel
+
 ---
 
 ## 10. Incident diagnosis and remediation
@@ -763,6 +861,49 @@ What notification channels are configured?
 
 ## 13. GitOps
 
+### Admin → Git — org-level configuration
+
+Access via the **⚙ Admin** panel → **Git** sub-tab. This panel has two sections:
+
+**Git provider card** — configure the token the agent uses for all Git and registry operations:
+
+| Field | Description |
+|-------|-------------|
+| Provider | `GitHub` or `GitLab` |
+| Personal Access Token | `ghp_...` or `glpat-...` — stored encrypted, never displayed again |
+| GitLab URL | Only for self-hosted GitLab (e.g. `https://gitlab.mycompany.com`) |
+
+The status badge shows **Connected ✓** (green) once a token has been saved, or **Not configured** (gray) if no token is stored.
+
+**Apps & repositories table** — links each app to its source repo:
+
+| Column | Description |
+|--------|-------------|
+| App / Namespace | Application name and Kubernetes namespace |
+| Env | Environment badge: `prod` (red) · `staging` (yellow) · other (gray) |
+| Status | ● running / ○ stopped |
+| Repository | `owner/repo` link with branch and last commit SHA. Click **Edit** to change inline. |
+| ✕ | Unlink the repo from this app |
+
+To link an unlinked app: click **Link repo** in the Repository column → type `owner/repo` → Enter.
+
+---
+
+### Git tab — per-app view
+
+Select an application in the sidebar and click the **Git** tab.
+
+**When no repo is linked:**
+An inline form appears — type `owner/repo` and press Enter to link the app immediately. The Git tab then loads the commit history.
+
+**When a repo is linked:**
+
+| Section | What it shows |
+|---------|--------------|
+| Commit history | List of recent commits: SHA · message · author · date |
+| Current commit badge | Green **current** badge on the commit deployed on the cluster |
+| Rollback | Click any older commit to roll back the deployment to that version |
+
 ### Modifying a configuration in a repository
 
 ```
@@ -770,13 +911,91 @@ Increase the replicas of inference-server to 3 in the infra repo
 and open a PR for review.
 ```
 
-The agent clones the repository (with the token configured in Secrets), patches the YAML, generates the diff, commits, and opens the PR — all in a single operation.
+The agent clones the repository (using the token from Admin → Git), patches the YAML, generates the diff, commits, and opens the PR — all in a single operation.
 
-### Viewing the GitOps status of an application
+### Building and pushing a Docker image
 
-**Git** tab → select the application in the sidebar.
+```
+Build and push the latest commit of acme/api-server to ghcr.io/acme/api-server:latest
+using token=@secret:ghcr_token
+```
 
-Displays: current branch, last commit, diff vs main, open PRs associated with VibOps commits.
+The agent runs `docker build`, logs every build layer in the job output, pushes the image to the registry, and returns the image digest. Use the digest to pin the image in Helm:
+
+```
+helm upgrade api-server ./charts/api-server \
+  --set image.digest=sha256:cafebabe...
+```
+
+**Supported registries:**
+
+| Registry | Image prefix | Auth |
+|----------|-------------|------|
+| GitHub Container Registry | `ghcr.io/org/app:tag` | GitHub PAT with `write:packages` |
+| Docker Hub | `org/app:tag` | Docker Hub access token |
+| GitLab Registry | `registry.gitlab.com/group/app:tag` | GitLab PAT with `write_registry` |
+| Self-hosted | `registry.mycompany.com/app:tag` | Username + password |
+
+The registry token is passed via `--password-stdin` — never via CLI argument — and is masked in all job logs.
+
+### Full GitOps pipeline in one conversation
+
+```
+Deploy the latest commit of acme/api-server to prod:
+1. Clone the repo
+2. Build and push the image to ghcr.io/acme/api-server with token=@secret:ghcr_token
+3. Upgrade the Helm release with the new image digest
+```
+
+The agent chains `git_clone` → `docker_build_push` → `helm_upgrade` automatically, confirming before the Helm upgrade (destructive action).
+
+### CI pipeline triggering
+
+VibOps can trigger and monitor CI/CD pipelines on GitHub Actions or GitLab CI using the same token configured in **Admin → Git**.
+
+**Trigger a pipeline and wait for the result:**
+```
+Trigger the build.yml workflow on acme/api-server on the main branch
+```
+```
+Wait for CI pipeline 12345 on acme/api-server to finish
+```
+
+**Full build → CI → deploy pipeline:**
+```
+Clone acme/api-server, build and push the Docker image to ghcr.io/acme/api-server:latest,
+trigger the integration-tests.yml workflow, wait for it to succeed, then deploy to staging.
+```
+
+The agent chains `ci_trigger` → `ci_wait` → `helm_upgrade`, aborting the deploy if the CI pipeline fails.
+
+**List registry tags:**
+```
+List available tags for ghcr.io/acme/api-server
+```
+
+#### Admin → CI panel
+
+The **Admin → CI** sub-tab shows all pipeline runs triggered by VibOps:
+
+| Column | Description |
+|--------|-------------|
+| App | Short repository name |
+| Workflow / Pipeline | Workflow file (GitHub) or pipeline name (GitLab) |
+| Branch | Git ref used for the trigger |
+| Status | `success` / `running` / `failure` / `cancelled` |
+| Duration | Elapsed seconds for completed runs |
+| Triggered | Timestamp of the VibOps job |
+| Link ↗ | Direct link to the GitHub Actions run or GitLab pipeline |
+
+**Provider scope requirements:**
+
+| Provider | Required PAT scope |
+|----------|--------------------|
+| GitHub | `workflow` (plus `repo` if private) |
+| GitLab | `api` (upgrade from `read_api` used by the Git connector) |
+
+> The CI connector reuses the `GIT_TOKEN` set in Admin → Git. No additional credential is required.
 
 ### Using a Git token from Secrets
 
@@ -784,7 +1003,7 @@ Displays: current branch, last commit, diff vs main, open PRs associated with Vi
 Clone the infra repo using token=@secret:git_token
 ```
 
-Secrets are injected at runtime — the raw value is never exposed in the chat.
+Secrets are injected at runtime — the raw value is never exposed in the chat. See [Secrets](#18-secrets) for how to create them.
 
 ---
 
@@ -816,17 +1035,42 @@ Use the **context selector** (top left) to switch between clusters. **Refresh** 
 
 ---
 
-## 16. Monitoring tab
+## 16. Fleet tab
 
-Real-time GPU metrics collected by DCGM Exporter:
+The Fleet tab is the **multi-cluster control centre**. It is the second tab in the navigation bar (right after Dashboard) and always shows an online/offline indicator.
 
-- Temperature per GPU (°C)
-- GPU utilization rate (%)
-- VRAM memory used / free (MiB)
-- Power consumed (W)
-- ECC error counters
+### Fleet sub-tab
 
-**Prerequisites:** DCGM Exporter must be deployed on the cluster and Prometheus configured. If not, the tab displays installation instructions.
+Aggregated KPIs across all connected sites:
+
+- **Clusters online** — number of live clusters and active gateways
+- **GPU total** — sum of all GPUs across the fleet
+- **GPU used / %** — real-time utilisation bar
+- **Nodes** — total worker nodes
+- **Unreachable** — gateways that have stopped reporting
+
+Below the KPIs: a **cluster table** listing every cluster with its gateway, GPU used/total, a utilisation bar, and a **Chat** button to target that cluster directly.
+
+**Cross-cluster quick actions** (bottom of the tab):
+- Health check on all clusters
+- Active alerts across all clusters
+- Best cluster for a new deployment
+- GPU usage comparison
+
+If no gateway is registered yet, the tab shows a **"Add a gateway"** button that opens the Admin panel.
+
+### Gateways sub-tab
+
+Lists all registered gateways with their status (online / offline / never connected), last ping, and declared clusters. Use this to diagnose connectivity issues.
+
+### Grafana sub-tab
+
+Embedded Grafana dashboards (GPU metrics, API SLOs) — requires Prometheus + Grafana configured in Admin → Integrations.
+
+**Real-time GPU metrics collected by DCGM Exporter:**
+- Temperature per GPU (°C), GPU utilization (%), VRAM used/free (MiB), Power (W), ECC errors
+
+**Prerequisites:** DCGM Exporter deployed on the cluster and Prometheus configured. If not, the tab shows installation instructions.
 
 To detect and install automatically:
 ```
@@ -1076,7 +1320,7 @@ Connect VibOps to your external tools so the agent can use them automatically.
 
 | Integration | What it does | What to provide |
 |-------------|---------------|------------------------|
-| **Git Provider** (GitHub or GitLab) | Clone repos, push configs, create PRs/MRs (GitOps workflow) | `GIT_PROVIDER` + Personal Access Token (`repo`, `workflow` for GitHub — `read_api`, `write_repository` for GitLab) + `GIT_URL` for self-hosted GitLab |
+| **Git Provider** (GitHub or GitLab) | Clone repos, push configs, create PRs/MRs, build and push Docker images | Configured in **Admin → Git** sub-tab (dedicated panel — not this Integrations tile) |
 | **Prometheus** | Real-time metrics, SLOs, incident correlation | URL (e.g. `http://prometheus:9090`) + credentials if auth is enabled |
 | **Grafana** | Receive Grafana/AlertManager alerts in VibOps | The webhook URL to configure in Grafana — VibOps side is automatic |
 | **NGC (NVIDIA)** | Deploy NIMs from the NVIDIA catalog | NGC API key (obtained at `ngc.nvidia.com`) |
@@ -1092,7 +1336,7 @@ Connect VibOps to your external tools so the agent can use them automatically.
 
 **Verify an integration is working:**
 - **Git Provider**: ask the agent to clone a repo: `"Clone the repo github.com/myorg/infra"` (or your GitLab URL). If it works, the token is valid.
-- **Prometheus**: the Monitoring → Fleet tab should display metrics. If you see "Prometheus not detected", the URL is incorrect or unreachable.
+- **Prometheus**: the Fleet tab → Grafana sub-tab should display metrics. If you see "Prometheus not detected", the URL is incorrect or unreachable.
 - **NGC**: ask the agent: `"List the available models in the NGC catalog"`.
 
 ---
@@ -1249,10 +1493,15 @@ The worker receives only the necessary instructions, sends back results, and pus
 
 ### Connecting a cluster via the console
 
-1. Admin → **Gateways** tab → **New Gateway**
-2. Enter the cluster name and URL
-3. Copy the generated Helm command
-4. Execute it on the target cluster
+Two entry points lead to the same gateway registration form:
+- **Fleet tab** → "Add a gateway" button (shown when no cluster is connected, or via the Gateways sub-tab)
+- **⚙ Admin → Gateways** sub-tab → **New Gateway**
+
+Steps:
+1. Enter a name for the gateway (e.g. `prod-gpu`, `eu-h100-pool`)
+2. Copy the generated token — **shown only once**
+3. Copy the Helm deploy command and run it on the target cluster
+4. The Fleet tab shows the gateway as **online** within 30 seconds
 
 ### Connecting a cluster via the script
 
@@ -1275,6 +1524,18 @@ helm install vibops-worker charts/vibops-connect \
   --set worker.core.token=<gateway-token>
 ```
 
+### Gateway type and Slurm configuration (v0.17.4+)
+
+Each gateway has a **gateway_type** that controls which workload collectors run:
+
+| Gateway type | Collectors active |
+|-------------|------------------|
+| `kubernetes` | `KubernetesWorkloadCollector` (DCGM/ROCm-SMI via Prometheus) |
+| `slurm` | `SlurmWorkloadCollector` (squeue + sacct) |
+| `hybrid` | Both collectors run in parallel |
+
+For `slurm` and `hybrid` gateways, the **slurm_config** JSONB block stores the connection parameters (host, ssh_user, ssh_port, rest_url, ssh_key_secret). These fields are exposed in the gateway form (shown conditionally based on the selected gateway_type) and in the API. SSH key secret names are masked in all API responses.
+
 ### Gateway status
 
 In Admin → Gateways, each gateway displays:
@@ -1289,7 +1550,7 @@ A gateway disconnected for more than 5 minutes switches to `degraded` state and 
 
 ## 19. FinOps tab
 
-**What is it for?** The FinOps tab gives you a centralized view of what your GPUs cost, where the money goes, and how to control it. Four sub-tabs: **Waste**, **Budget**, **Chargeback**, **Alerts** (history of overruns).
+**What is it for?** The FinOps tab gives you a centralized view of what your GPUs cost, where the money goes, and how to control it. Five sub-tabs: **Waste**, **Budget**, **Chargeback**, **Alerts** (history of overruns), **Workloads** (live per-workload GPU utilisation).
 
 **Who should use it:** admins, infrastructure leads, and anyone who needs to justify GPU costs to a finance director.
 
@@ -1445,6 +1706,48 @@ The history of all budget overruns: when the soft cap or hard cap was reached, w
 | **Date** | Date and time of triggering |
 
 > Alerts are listed in reverse chronological order (most recent first). If the list is empty: either no budget is configured, or you have never exceeded the threshold — that is a good thing!
+
+---
+
+### Workloads sub-tab — per-workload GPU metrics
+
+**What is it for?** Shows live GPU utilisation, memory usage, and power draw at the individual workload level — covering both Kubernetes pods (sourced from DCGM Exporter / ROCm-SMI Exporter via Prometheus) and Slurm jobs (tracked via `squeue` + `sacct`). Data is persisted in the `workloads` table and updated every 60 seconds.
+
+**Prerequisites:**
+- DCGM Exporter ≥ 3.1.x (NVIDIA) or ROCm-SMI Exporter (AMD) installed in the cluster with Kubernetes pod labels enabled
+- Gateway configured with a `prometheus_url` (Admin → Gateways → edit) for Kubernetes workloads
+- For Slurm workloads: `gateway_type=slurm` or `hybrid` with `slurm_config` filled in
+
+**How to use:**
+1. FinOps → **Workloads** sub-tab
+2. Select a cluster from the dropdown — metrics load automatically
+3. Workloads are ranked by GPU utilisation (highest first)
+4. Workloads with util% < 20 are highlighted in amber — potential waste candidates
+
+**Columns:**
+
+| Column | Description |
+|---------|-------------|
+| **Workload** | Kubernetes pod name or Slurm job name |
+| **Type** | `k8s_pod` (Kubernetes) or `slurm_job` (Slurm HPC) |
+| **Namespace** | Kubernetes namespace or Slurm partition |
+| **GPU Util %** | Average utilisation across all GPUs assigned to this workload |
+| **Memory (MB)** | Total framebuffer memory used across all GPUs |
+| **Power (W)** | Total power draw (NVIDIA only — AMD exporters do not expose pod-level power) |
+
+**If Prometheus is not configured:** the tab shows a "Prometheus not configured" message. No error — the gateway and cluster still function normally; metrics are simply unavailable.
+
+**From the agent:**
+```
+"Which pods are using the most GPU on vibops-dev?"
+→ get_top_consuming_pods(cluster="vibops-dev", limit=10)
+
+"Show me GPU metrics for pod llm-inference-7b in the prod namespace"
+→ get_pod_gpu_metrics(cluster="vibops-dev", namespace="prod", pod_name="llm-inference-7b")
+
+"Summarize GPU utilisation across the ml-team namespace"
+→ get_namespace_gpu_aggregated(cluster="vibops-dev", namespace="ml-team")
+```
 
 ---
 

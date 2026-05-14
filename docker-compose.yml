@@ -80,6 +80,7 @@ services:
       DATADOG_API_KEY: ${DATADOG_API_KEY:-}
       DATADOG_APP_KEY: ${DATADOG_APP_KEY:-}
       DATADOG_SITE: ${DATADOG_SITE:-datadoghq.com}
+      SLURM_DEMO_MODE: ${SLURM_DEMO_MODE:-true}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/.kube:/root/.kube         # kubeconfig host — setup_kubeconfig écrit ici

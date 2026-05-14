@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-05-03 · v0.15.0-sprint15_
+_Last updated: 2026-05-12 · v0.17.5_
 
 ## Principles
 
@@ -120,10 +120,28 @@ _Last updated: 2026-05-03 · v0.15.0-sprint15_
 - [x] 3 alerting rules : service down, failure rate >10%, budget hard cap
 - [x] Counter `vibops_jobs_total{action, status}` dans le worker
 
+### Workload Persistence & Slurm Collector (Sprints A/B — v0.17.3–0.17.5)
+- [x] `workloads` table — `upsert_workloads()`, `mark_terminated_workloads()`, `finalize_completed_workloads()`; shadow-write alongside Prometheus live-query path
+- [x] `WorkloadSnapshot` dataclass — canonical representation for K8s and Slurm collectors
+- [x] `KubernetesWorkloadCollector` — Prometheus-based running GPU workload discovery
+- [x] `sync_workloads` Celery Beat task (60 s) — multi-gateway, multi-collector dispatch
+- [x] `GET /api/v1/workloads` + `GET /api/v1/workloads/{id}` — filtered listing + detail endpoints
+- [x] `SlurmWorkloadCollector` — REST (slurmrestd v0.0.38) → SSH+JSON fallback; `parse_alloc_gres()` for GRES multi-type
+- [x] `SlurmGatewayConfig` — validated config dataclass with secret name references
+- [x] `gateway_type` + `slurm_config` JSONB on Gateway model (migration `d5e6f7a8b9c0`)
+- [x] Hybrid gateways — both K8s and Slurm collectors run; snapshots merged
+- [x] sacct integration — `collect_completed()` captures terminal jobs between polls; `finalize_completed_workloads()` writes exact timestamps
+- [x] Console Workloads sub-tab in FinOps panel
+- [x] Console gateway form — gateway_type select, Slurm config section, prometheus_url field
+- [x] ADR 0024 — Slurm workload collector (transport hierarchy, GRES parsing, secret management)
+
 ### MCP Server (`VibOpsai/vibops-mcp`)
 - [x] 16 observation tools — clusters, deployments, jobs, GPU metrics, MTTR, cost, gateways, alerts, pipelines…
 - [x] 8 action tools — scale, deploy, helm upgrade/uninstall, kubectl, git clone, create secret, trigger pipeline
 - [x] 3 config tools — set cluster rate, register/delete gateway
+
+### Security
+- [x] CVE scanning — `pip-audit` on all `requirements.txt` + Trivy filesystem scan, blocking on HIGH/CRITICAL, runs on every push and PR
 
 ### Connect Gateway
 - [x] `vibops-worker` standalone image + Helm chart `charts/vibops-connect`
@@ -168,11 +186,46 @@ _Last updated: 2026-05-03 · v0.15.0-sprint15_
 - [ ] mTLS option between gateway and core
 
 ### Image build & CI connector
-- [ ] `docker_build` tool — build a Docker image from a Git repo or local context, push to registry (kaniko or Docker-in-Docker)
-- [ ] `docker_tag` / `docker_push` — tag and push an existing image to a registry
-- [ ] CI connector — trigger and monitor a GitHub Actions / GitLab CI pipeline, wait for result before next step
-- [ ] Full build→push→deploy pipeline in one conversation: `git clone` → `docker_build` → `docker_push` → `helm upgrade`
+- [x] `docker_build` — build a Docker image from a local context / cloned repo (600s timeout, layer-by-layer log streaming)
+- [x] `docker_tag` — retag an existing local image (fast, synchronous)
+- [x] `docker_push` — login + push to GHCR / Docker Hub / GitLab Registry / self-hosted; token via `--password-stdin`, masked in logs; returns digest
+- [x] `docker_build_push` — combined build + push; digest returned for Helm image pinning
+- [x] Full build→push→deploy pipeline: `git_clone` → `docker_build_push` → `helm_upgrade` in one conversation
+- [x] Admin → Git panel — org-level token + Apps & repositories management table (inline edit, unlink)
+- [x] Git tab inline repo-link form — link any app to its repo without leaving the main view
+- [x] CI connector — `ci_trigger`, `ci_status`, `ci_wait`, `registry_list_tags`; GitHub Actions dispatch + GitLab pipeline trigger; reuses GIT_TOKEN
+- [x] Admin → CI panel — provider status card + pipeline runs table (App / Workflow / Branch / Status / Duration / Triggered / Link)
 - [ ] Registry connector — list images, inspect tags, detect untagged `latest` across a private registry
+- [ ] Kaniko support — in-cluster builds without Docker daemon (required for locked-down Kubernetes environments)
+
+### Local cluster image loading (Sprint 16 patch)
+- [x] `kind_load_image` — load a locally built image into kind's containerd (bypasses Docker daemon)
+- [x] `k3d_load_image` — load a locally built image into k3d cluster
+- [x] `minikube_load_image` — load a locally built image into minikube (any driver)
+- [x] `k3s_load_image` — load via `docker save | k3s ctr images import -` async pipe
+
+### Private registry pull secrets (Sprint 16 patch)
+- [x] `create_pull_secret` — idempotent `imagePullSecret` for any registry (dry-run + apply)
+- [x] `create_ecr_pull_secret` — AWS ECR: auto-fetches login token via `aws ecr get-login-password` (12h TTL)
+- [x] `create_gcr_pull_secret` — GCP GCR: service account JSON → `_json_key` dockerconfigjson
+- [x] `create_acr_pull_secret` — Azure ACR: service principal credentials
+- [x] `deploy_webapp` `image_pull_secret` param — patches deployment spec after creation
+
+### ArgoCD auto-sync (Sprint 16 patch)
+- [x] `argocd_enable_auto_sync` — sets `syncPolicy.automated` with `prune` + `selfHeal` options
+- [x] `argocd_disable_auto_sync` — removes `syncPolicy.automated`, reverts to manual sync
+- [x] Agent prompt: ArgoCD drift remediation workflow (`argocd_diff` → `argocd_sync` or enable auto-sync)
+
+### OpenShift (Sprint 16 patch)
+- [x] `openshift_add_scc` — `oc adm policy add-scc-to-user` for SCC-blocked workloads
+- [x] `openshift_create_route` — `oc expose service` with optional hostname; replaces create_ingress on OpenShift
+- [x] Agent prompt: OpenShift-specific routing rules (use Route instead of Ingress, SCC before pod start)
+
+### Demo scenarios (Sprint 16 patch)
+- [x] Scenario 26 — Private registry K8s deploy (`create_pull_secret` → `deploy_webapp(image_pull_secret=…)`)
+- [x] Scenario 27 — ArgoCD auto-sync on push (enable_auto_sync + git_commit_push, no manual sync)
+- [x] Scenario 28 — Cloud registry deploy (ECR+EKS and GCR+GKE variants)
+- [x] Scenario 29 — OpenShift deploy (`openshift_add_scc` + `deploy_webapp` + `openshift_create_route`)
 
 ### Onboarding
 - [ ] Step 3 GitHub: functional PR webhook setup (not just skip)

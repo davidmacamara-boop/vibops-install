@@ -60,7 +60,7 @@ core:
     authPasswordHash: ""   # vide = auth désactivée
     databaseUrl: ""        # auto-généré si postgresql.enabled
     # Licence VibOps — laisser vide pour trial 14 jours
-    # Obtenir une clé : contacter sales@vibops.io
+    # Obtenir une clé : contacter david@vibops.ai
     # La clé est un JWT RS256 signé par VibOps. Aucun secret partagé requis côté client.
     licenceKey: ""
 
@@ -101,8 +101,8 @@ agent:
     # anthropic: claude-sonnet-4-6  |  openai/ollama: glm-4, mistral-7b, llama3…
     LLM_MODEL: "claude-sonnet-4-6"
     # On-prem OpenAI-compatible endpoint (required when LLM_PROVIDER=openai)
-    OPENAI_BASE_URL: ""   # e.g. http://glm-service.ai-infra.svc:8000/v1
-    OPENAI_API_KEY: ""    # leave empty for on-prem endpoints with no auth
+    LLM_BASE_URL: ""      # e.g. http://glm-service.ai-infra.svc:8000/v1 (openai provider only)
+    LLM_API_KEY: ""       # set here only if not using secret.llmApiKey
     # Ollama endpoint (required when LLM_PROVIDER=ollama)
     OLLAMA_BASE_URL: "http://ollama:11434"
 

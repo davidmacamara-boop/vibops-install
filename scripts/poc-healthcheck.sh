@@ -47,19 +47,20 @@ else
 fi
 
 # ── 2. Worker status ──────────────────────────────────────────────────────────
-WORKER_STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; h=json.load(sys.stdin); print(h.get('worker',{}).get('status','unknown'))" 2>/dev/null || echo "unknown")
-WORKER_COUNT=$(echo "$HEALTH" | python3 -c "import sys,json; h=json.load(sys.stdin); print(h.get('worker',{}).get('active_workers',0))" 2>/dev/null || echo "0")
+WORKER_RAW=$(echo "$HEALTH" | python3 -c "import sys,json; h=json.load(sys.stdin); print(h.get('checks',{}).get('worker','unknown'))" 2>/dev/null || echo "unknown")
 
-if [[ "$WORKER_STATUS" == "online" ]]; then
-  ok "Worker status: online (${WORKER_COUNT} active)"
+if [[ "$WORKER_RAW" == unknown ]]; then
+  fail "Worker status: unknown — run: docker compose restart worker beat"
+elif [[ "$WORKER_RAW" == ok* ]]; then
+  ok "Worker status: ${WORKER_RAW}"
 else
-  fail "Worker status: ${WORKER_STATUS} — run: docker compose restart worker beat"
+  fail "Worker status: ${WORKER_RAW} — run: docker compose restart worker beat"
 fi
 
 # ── 3. Database ───────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}2. Database${NC}"
-DB_STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; h=json.load(sys.stdin); print(h.get('database','unknown'))" 2>/dev/null || echo "unknown")
+DB_STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; h=json.load(sys.stdin); print(h.get('checks',{}).get('postgres','unknown'))" 2>/dev/null || echo "unknown")
 if [[ "$DB_STATUS" == "ok" ]]; then
   ok "PostgreSQL connected"
 else

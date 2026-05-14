@@ -150,11 +150,11 @@ Open `.env` and set your API key:
 ```bash
 # Default: Claude (recommended)
 LLM_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-...
+LLM_API_KEY=sk-ant-...
 
 # Or: OpenAI-compatible on-prem endpoint
 LLM_PROVIDER=openai
-OPENAI_BASE_URL=http://your-llm-endpoint:8000/v1
+LLM_BASE_URL=http://your-llm-endpoint:8000/v1
 
 # Or: Ollama (local, no API key required)
 LLM_PROVIDER=ollama
@@ -237,7 +237,7 @@ Create `my-values.yaml` (never commit this file — store it in your secrets man
 # ── LLM provider ──────────────────────────────────────────────
 agent:
   secret:
-    anthropicApiKey: "sk-ant-..."      # REQUIRED (or configure on-prem LLM below)
+    llmApiKey: "sk-ant-..."            # REQUIRED (or configure on-prem LLM below)
 
 # ── Security ──────────────────────────────────────────────────
 core:
@@ -405,11 +405,10 @@ If you skipped the wizard or need to add more clusters, use one of these methods
 
 ### Method A — Via the console (recommended)
 
-1. Open **Settings → Gateways** in the console
-2. Click **New Gateway**
-3. Give it a name and click **Register**
-4. Copy the token (shown once only)
-5. Deploy the gateway worker on your GPU cluster (see below)
+1. Open the **Fleet** tab → **Gateways** sub-tab → click **New Gateway** (or **⚙ Admin → Gateways → New Gateway**)
+2. Give it a name and click **Register**
+3. Copy the token (shown once only)
+4. Deploy the gateway worker on your GPU cluster (see below)
 
 ### Method B — Via the setup script (local dev)
 
@@ -454,7 +453,7 @@ helm upgrade --install vibops-connect vibops/vibops-connect \
 
 ### Verify the gateway is online
 
-In the console, open **Settings → Gateways**. The gateway should show **Online** within 30 seconds.
+In the console, open the **Fleet** tab (second tab in the navigation bar). The gateway should appear in the **Gateways** sub-tab with status **Online** within 30 seconds. The Fleet sub-tab will show the cluster and its GPU metrics.
 
 The agent will automatically discover namespaces, deployments and GPU resources on the next
 discovery cycle (triggered manually via the status bar or automatically every 5 minutes).
@@ -685,9 +684,8 @@ Recommended for clients who require full data sovereignty (no data leaves the ne
 # In .env
 LLM_PROVIDER=openai
 LLM_MODEL=glm-4
-OPENAI_BASE_URL=http://glm.ai-infra.local:8000/v1
-OPENAI_API_KEY=                          # leave empty if no auth
-ANTHROPIC_API_KEY=                       # not needed for on-prem
+LLM_BASE_URL=http://glm.ai-infra.local:8000/v1
+LLM_API_KEY=                             # leave empty if no auth
 ```
 
 ### Configuration (Helm)
@@ -697,10 +695,9 @@ agent:
   env:
     LLM_PROVIDER: "openai"
     LLM_MODEL: "glm-4"
-    OPENAI_BASE_URL: "http://glm.ai-infra.svc.cluster.local:8000/v1"
-    OPENAI_API_KEY: ""
+    LLM_BASE_URL: "http://glm.ai-infra.svc.cluster.local:8000/v1"
   secret:
-    anthropicApiKey: ""
+    llmApiKey: ""
 ```
 
 For Ollama:
