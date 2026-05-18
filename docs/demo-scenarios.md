@@ -1385,7 +1385,7 @@ Epoch 13/50: loss=1.791 | acc=0.641 | lr=2.3e-5
 ---
 
 **Step 1 — Register the Slurm gateway via the console form:**
-1. Open console → *Connect* tab → *Register gateway*
+1. Open console → **Fleet** tab → **"Add a gateway"** (or ⚙ Admin → Gateways → New Gateway)
 2. Name: `hpc-slurm-prod` | Clusters: `gpu-partition`
 3. **Gateway type:** select **Slurm (HPC)**
 4. Slurm section appears:

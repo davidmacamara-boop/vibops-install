@@ -251,7 +251,7 @@ if [[ "$SEGMENT" == "csp" ]]; then
   echo ""
   cat <<CONNECT
   # Sur le cluster GPU du client final — utiliser le token généré dans la console :
-  # https://${HOST} → Settings → Gateways → New Gateway
+  # https://${HOST} → Fleet tab → "Add a gateway"  (ou ⚙ Admin → Gateways → New Gateway)
 
   helm upgrade --install vibops-connect vibops/vibops-connect \\
     --namespace vibops-connect --create-namespace \\
@@ -264,7 +264,7 @@ CONNECT
 else
   echo -e "${YELLOW}Pour connecter vos clusters GPU internes (vibops-connect) :${NC}"
   echo ""
-  echo -e "  1. Créer un gateway : ${CYAN}https://${HOST}${NC} → Settings → Gateways"
+  echo -e "  1. Créer un gateway : ${CYAN}https://${HOST}${NC} → Fleet tab → 'Add a gateway'  (ou ⚙ Admin → Gateways → New Gateway)"
   echo -e "  2. Déployer sur chaque cluster GPU :"
   echo ""
   cat <<ENTERPRISE_CONNECT
