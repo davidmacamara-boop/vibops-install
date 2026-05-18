@@ -373,14 +373,13 @@ On first access, the onboarding wizard appears automatically. It guides you thro
 **Step 1 — Register your first gateway**
 
 The gateway is the VibOps Connect worker that runs inside (or alongside) your GPU cluster.
-It polls the Core for jobs and reports cluster metrics.
+It polls the Core for jobs, auto-discovers available kubeconfig contexts, and reports cluster metrics in every heartbeat.
 
-1. Enter a name for the gateway (e.g. `prod-gpu-cluster`, `h100-pool-eu`)
-2. Click **Register Gateway**
-3. Copy the token shown — **it is displayed only once**
-4. Follow the deploy command shown on screen (Docker or Helm)
-5. Once the gateway pings back, the wizard shows "Gateway connected ✓"
-6. Click **Next**
+1. Enter a name for the gateway (e.g. `prod-gpu-cluster`, `h100-pool-eu`) and click **Register**
+2. Copy the token shown — **it is displayed only once**
+3. Copy the pre-filled Helm (or Docker) deploy command and run it on the target cluster
+4. The wizard shows **"Waiting for worker to connect…"** — it advances automatically once the first heartbeat arrives
+5. The wizard confirms "Gateway connected ✓" and lists the discovered clusters
 
 **Step 2 — Connect your Git provider (optional)**
 
@@ -405,10 +404,10 @@ If you skipped the wizard or need to add more clusters, use one of these methods
 
 ### Method A — Via the console (recommended)
 
-1. Open the **Fleet** tab → **Gateways** sub-tab → click **New Gateway** (or **⚙ Admin → Gateways → New Gateway**)
-2. Give it a name and click **Register**
-3. Copy the token (shown once only)
-4. Deploy the gateway worker on your GPU cluster (see below)
+1. Open the **Fleet** tab → click **"Add a gateway"** (or **⚙ Admin → Gateways → New Gateway**)
+2. Enter a name and click **Register**
+3. Copy the token — shown only once — and the pre-filled Helm deploy command
+4. Run the command on your GPU cluster; the wizard auto-detects the connection within 30 seconds
 
 ### Method B — Via the setup script (local dev)
 

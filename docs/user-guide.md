@@ -1057,7 +1057,9 @@ Below the KPIs: a **cluster table** listing every cluster with its gateway, GPU 
 - Best cluster for a new deployment
 - GPU usage comparison
 
-If no gateway is registered yet, the tab shows a **"Add a gateway"** button that opens the Admin panel.
+If no gateway is registered yet, the tab shows a **"Add a gateway"** button that opens the gateway wizard directly.
+
+Removing a cluster from the Fleet table (×) permanently removes it from the gateway's cluster list. The cluster is added to a blocklist and will not reappear even after the gateway sends its next heartbeat.
 
 ### Gateways sub-tab
 
@@ -1493,15 +1495,18 @@ The worker receives only the necessary instructions, sends back results, and pus
 
 ### Connecting a cluster via the console
 
-Two entry points lead to the same gateway registration form:
-- **Fleet tab** → "Add a gateway" button (shown when no cluster is connected, or via the Gateways sub-tab)
+Two entry points open the gateway wizard:
+- **Fleet tab** → **"Add a gateway"** button (opens the wizard directly)
 - **⚙ Admin → Gateways** sub-tab → **New Gateway**
 
-Steps:
-1. Enter a name for the gateway (e.g. `prod-gpu`, `eu-h100-pool`)
-2. Copy the generated token — **shown only once**
-3. Copy the Helm deploy command and run it on the target cluster
-4. The Fleet tab shows the gateway as **online** within 30 seconds
+Wizard steps:
+1. Enter a name for the gateway (e.g. `prod-gpu`, `eu-h100-pool`) and click **Register**
+2. Copy the generated token — **shown only once** — and the pre-filled Helm deploy command
+3. Run the Helm command on your target cluster (or start the Docker worker with the token)
+4. The wizard shows "Waiting for worker to connect…" and advances automatically when the first heartbeat arrives
+5. The Fleet tab shows the gateway as **online** and lists its clusters within 30 seconds
+
+The worker auto-discovers all kubeconfig contexts available on the node where it runs and reports them as clusters in every heartbeat. No manual cluster registration is required.
 
 ### Connecting a cluster via the script
 
