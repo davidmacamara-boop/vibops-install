@@ -231,11 +231,10 @@ The agent will respond and show the tool it used. If you see a response (even an
 
 VibOps manages GPU clusters through a small connector called a **Gateway**.
 
-1. In the console, go to **Settings → Gateways**
-2. Click **New Gateway**
-3. Give it a name (e.g. `my-gpu-cluster`)
-4. Click **Register** — a token is shown **once only**, copy it immediately
-5. On the machine that has `kubectl` access to your GPU cluster, run:
+1. In the console, go to the **Fleet** tab and click **"Add a gateway"** (or **⚙ Admin → Gateways → New Gateway**)
+2. Enter a name (e.g. `my-gpu-cluster`) and click **Register**
+3. Copy the token — **shown only once** — and the pre-filled Helm command
+4. On the machine that has `kubectl` access to your GPU cluster, run:
 
 ```
 # Add the VibOps Helm repo (once per machine)
@@ -250,7 +249,9 @@ helm upgrade --install vibops-connect vibops/vibops-connect \
   --set vibops.token="PASTE_YOUR_TOKEN_HERE"
 ```
 
-Once connected, the gateway shows **Online** in the console within 30 seconds.
+5. The wizard shows **"Waiting for worker to connect…"** and advances automatically when the first heartbeat arrives
+
+The worker auto-discovers all kubeconfig contexts on the node where it runs — no manual cluster registration needed.
 
 **To connect a second or third cluster**, repeat from step 1 with a different gateway name.
 
@@ -478,8 +479,8 @@ docker compose restart core
 
 For each GPU cluster:
 
-1. In the console, go to **Settings → Gateways → New Gateway**
-2. Copy the token (shown once only)
+1. In the console, go to the **Fleet** tab → click **"Add a gateway"** (or **⚙ Admin → Gateways → New Gateway**)
+2. Enter a name and click **Register** — copy the token (**shown once only**) and the pre-filled Helm command
 3. From a machine with `kubectl` access to that cluster, run:
 
 ```
@@ -495,9 +496,9 @@ helm upgrade --install vibops-connect vibops/vibops-connect \
   --set vibops.token="PASTE_YOUR_TOKEN_HERE"
 ```
 
-The gateway uses **outbound polling only** — no inbound ports needed on the cluster side. The only requirement: the cluster can reach `INTERNAL_SERVER_IP:8000` on the internal network.
+4. The wizard auto-detects the connection and shows **Online** within 30 seconds
 
-Within 30 seconds, the gateway shows **Online** in the console.
+The gateway uses **outbound polling only** — no inbound ports needed on the cluster side. The worker auto-discovers all kubeconfig contexts on the node where it runs.
 
 **To add more clusters**, repeat from step 1 with a different gateway name (e.g. `gpu-cluster-2`).
 
@@ -652,8 +653,8 @@ docker compose restart core
 
 For each GPU cluster:
 
-1. In the console, go to **Settings → Gateways → New Gateway**
-2. Copy the token (shown once only)
+1. In the console, go to the **Fleet** tab → click **"Add a gateway"** (or **⚙ Admin → Gateways → New Gateway**)
+2. Enter a name and click **Register** — copy the token (**shown once only**) and the pre-filled Helm command
 3. From a machine with `kubectl` access to that cluster, run:
 
 ```
@@ -669,13 +670,15 @@ helm upgrade --install vibops-connect vibops/vibops-connect \
   --set vibops.token="PASTE_YOUR_TOKEN_HERE"
 ```
 
+4. The wizard auto-detects the connection and shows **Online** within 30 seconds
+
 The gateway uses **outbound HTTPS only** — the only firewall rule needed on the GPU cluster side:
 
 ```
 Allow outbound HTTPS (port 443) → your-domain.com or YOUR_PUBLIC_IP
 ```
 
-Within 30 seconds, the gateway shows **Online** in the console.
+The worker auto-discovers all kubeconfig contexts on the node where it runs — no manual cluster registration needed.
 
 **To add more clusters**, repeat from step 1 with a different gateway name (e.g. `gpu-cluster-2`).
 
