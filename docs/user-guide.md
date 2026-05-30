@@ -1319,40 +1319,49 @@ _(Org admins only)_
 
 The **Tool policy** sub-tab lets you override the default confirmation and approval rules for any action in the agent catalog — at the organization level.
 
-**How it works:**
+**Understanding the two safety flags:**
 
-Each action in VibOps has two safety flags defined by its connector:
+| Flag | What it does | Scope |
+|------|-------------|-------|
+| **Confirmation** | Before executing, the agent shows a dry-run preview and waits for the operator to type `confirmed: true` in the chat. Everything happens inside the conversation. | In-conversation |
+| **Approval** | VibOps sends a notification (Slack, email, webhook) to a person or external system. The job stays in `pending_approval` state until they click Approve or Reject. The operator in chat does not have a say. | Out-of-band |
 
-| Flag | Default behavior |
-|------|-----------------|
-| `requires_confirmation` | Agent pauses and asks before executing |
-| `requires_external_approval` | Execution is blocked until an external system approves |
+Both flags can be active simultaneously: the agent presents the dry-run and waits for in-chat confirmation, **and** sends an external approval request — the job only runs when both are satisfied.
 
-By default, only destructive actions require confirmation. Tool policy lets you raise the bar for your organization's specific risk appetite.
+**The table**
+
+The Tool policy table lists all 160+ actions across every registered connector. Each row shows:
+
+| Column | Description |
+|--------|-------------|
+| **Action** | The action name (monospace). A yellow `override` badge appears if your org has an active policy override. |
+| **Risk** | A red `⚠ destruct.` badge for actions that modify or delete infrastructure. |
+| **Confirmation** | Blue toggle — ON means the agent will pause and ask before executing. |
+| **Approval** | Amber toggle — ON means an external approval notification is sent before execution. |
 
 **To configure an action:**
 
-1. Admin → **Tool policy** sub-tab (or open the action drawer from the **Agents** tab)
-2. Find the action you want to adjust (use the search field)
-3. Toggle **Requires confirmation** and/or **Requires external approval**
+1. Admin → **Tool policy** sub-tab
+2. Use the search field or the **All / Active overrides / Destructive** filters to find the action
+3. Click the **Confirmation** or **Approval** toggle to enable/disable
 4. Changes apply immediately — no restart needed
 
 **Behavior of overrides:**
 
 - Overrides are **per-org** — your configuration does not affect other tenants
-- Overrides are **per-action** — you can configure each action independently
-- Setting a toggle to the connector default removes the override (the row shows no "override active" badge)
+- Overrides are **additive** — you can only raise the safety level, not remove a confirmation that is built into the connector
 - All changes are recorded in the **Audit** log with the admin's identity and timestamp
 
 **Example policies:**
 
-| Goal | Configuration |
-|------|--------------|
-| Always confirm before `helm_upgrade` | Enable confirmation on `helm_upgrade` |
-| Route all scaling decisions through ITSM | Enable external approval on `scale_deployment` |
-| Add a second confirmation step for MIG partitioning | Enable confirmation on `accelerator_partition_device` |
+| Goal | Action to configure | Toggle |
+|------|---------------------|--------|
+| Always confirm before Helm upgrades | `helm_upgrade` | Confirmation ON |
+| Route all scaling decisions through ITSM | `scale_deployment` | Approval ON |
+| Require both in-chat + manager sign-off on MIG partitioning | `accelerator_partition_device` | Both ON |
+| Enforce approval before any cluster deletion | `delete_cluster` | Approval ON |
 
-> **Non-admin users** see the current confirmation/approval state for each action as read-only badges in the catalog drawer — they cannot change it.
+> **Non-admin users** see confirmation/approval state as read-only information in the Agent Catalog drawer — they cannot change it.
 
 ---
 
