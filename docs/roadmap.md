@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-05-30 · v0.17.5-sprint3_
+_Last updated: 2026-05-30 · v0.17.5-sprint4_
 
 ## Principles
 
@@ -158,6 +158,13 @@ _Last updated: 2026-05-30 · v0.17.5-sprint3_
 - [x] **#4** — Multi-provider LLM judge: provider `"vibops"` (default) inherits `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL` from env — evaluations automatically use the same LLM as the agent (Anthropic, vLLM, Groq, Together, Ollama…); explicit `"claude"`, `"openai"`, `"ollama"` providers also supported per rubric
 - [x] Admin → **Eval Rubrics** sub-tab: create rubrics, define criteria with weights, choose LLM provider/model; rubrics list with run counts
 
+### AgentOps Sprint 4 — Anomaly Detection, Live Cost, L2 Scanner (2026-05-30)
+- [x] **A** — Proactive GPU anomaly detection: `AnomalyEvent` model + Celery Beat task `vibops.detect_anomalies` every 5 min; detects `gpu_idle` (<10%), `gpu_spike` (>90%), `node_loss`, `utilization_drop` (>30 pt drop) from `GpuMetricHistory`; deduplication + auto-resolution; notifies configured channels; Dashboard widget with severity badges + manual resolve
+- [x] **A** — Anomaly API: `GET /api/v1/anomalies`, `GET /anomalies/open`, `POST /anomalies/{id}/resolve` (org_admin)
+- [x] **B** — Live workload cost attribution: `GET /finops/workloads/live-cost` — running workloads × elapsed time × ClusterRate formula → `estimated_cost_usd` per workload, sorted by cost desc; FinOps Workloads panel shows live cost table + total
+- [x] **C** — L2 LLM-as-judge auto-scanner: `EvalRubric.is_auto_scanner` flag — when enabled, every job completion (success or failure) automatically triggers `evaluate_job` Celery task; checkbox in Admin → Eval Rubrics form
+- [x] fix(tests): `authed_client` fixture in conftest.py; all 12 `test_triggers.py` failures fixed (401 auth + transaction isolation)
+
 ### MCP Server (`VibOpsai/vibops-mcp`)
 - [x] 16 observation tools — clusters, deployments, jobs, GPU metrics, MTTR, cost, gateways, alerts, pipelines…
 - [x] 8 action tools — scale, deploy, helm upgrade/uninstall, kubectl, git clone, create secret, trigger pipeline
@@ -187,7 +194,7 @@ _Last updated: 2026-05-30 · v0.17.5-sprint3_
 
 ### Dataset & RLHF maturity
 - [ ] Dataset UI — consent management and export controls in console
-- [ ] GPU utilization per-job — per-pod DCGM via gateway (attribution currently impossible with concurrent workloads)
+- ~~[ ] GPU utilization per-job — per-pod DCGM via gateway (attribution currently impossible with concurrent workloads)~~ ✓ Sprint 4 (live cost attribution via ClusterRate × elapsed time)
 - ~~[ ] Salt rotation migration plan for `DATASET_PSEUDONYMIZATION_SALT`~~ ✓ Sprint 15
 - ~~[ ] Reseller consent ownership — which org sets consent for reseller_customer orgs~~ ✓ Sprint 15 (ADR 0020 Decision 2)
 
@@ -199,10 +206,10 @@ _Last updated: 2026-05-30 · v0.17.5-sprint3_
 - [ ] `scale_cluster` up/down split (ADR 0002 deferred)
 
 ### Intelligence
-- [ ] Proactive incident detection — agent monitors metrics autonomously between sessions
+- ~~[ ] Proactive incident detection — agent monitors metrics autonomously between sessions~~ ✓ Sprint 4 (anomaly detection Beat task)
 - [ ] Alert correlation across multiple services
 - [ ] Predictive GPU failure — temperature trends + DCGM error patterns → warn before incident
-- [ ] L2 LLM-as-judge scanner — non-blocking, catches subtle prompt↔schema contradictions
+- ~~[ ] L2 LLM-as-judge scanner — non-blocking, catches subtle prompt↔schema contradictions~~ ✓ Sprint 4 (is_auto_scanner on EvalRubric)
 
 ### Connect Gateway
 - [ ] Gateway capability discovery endpoint — declares which connectors it exposes

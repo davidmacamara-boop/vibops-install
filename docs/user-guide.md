@@ -42,6 +42,8 @@
     - [Approvals](#approvals)
     - [Org Policy (declarative YAML)](#org-policy-declarative-yaml)
     - [LLM Evaluation Rubrics](#llm-evaluation-rubrics-admin-only)
+    - [Proactive Anomaly Detection](#proactive-anomaly-detection)
+    - [Live Workload Cost Attribution](#live-workload-cost-attribution)
     - [Notifications](#notifications)
     - [Integrations](#integrations)
     - [Audit](#audit)
@@ -1603,6 +1605,108 @@ Evaluations are triggered from the [Session Replay](#session-replay) modal:
 5. Results appear inline: overall score, per-criterion scores, LLM justification
 
 Evaluation results are stored in the database and accessible via `GET /api/v1/eval/evaluations?job_id={id}`.
+
+#### L2 Auto-Scanner
+
+When you enable **Scanner L2** on a rubric, VibOps automatically evaluates every completed job in your organisation — successes and failures alike — without any manual action.
+
+**How to enable:**
+1. In the rubric create form, check **"Scanner L2 — apply to every completed job"**
+2. Only one rubric per org should have this enabled at a time (the most recent wins)
+
+**Use cases:**
+- Continuous quality gate: flag jobs whose outputs don't meet your correctness criteria
+- Failure analysis: automatically score every failure with a "root cause" rubric
+- Compliance audit: ensure every production action meets safety criteria
+
+Auto-scan evaluations appear in the [Session Replay](#session-replay) modal just like manually triggered evaluations.
+
+---
+
+### Proactive Anomaly Detection
+
+VibOps continuously monitors GPU metrics for all connected clusters and automatically raises **anomaly events** when abnormal conditions are detected — without waiting for a user to ask.
+
+The anomaly scanner runs every 5 minutes via a Celery Beat task.
+
+#### Anomaly types
+
+| Type | Trigger condition | Default severity |
+|------|-------------------|-----------------|
+| `gpu_idle` | Average GPU utilization < 10% over 15 minutes | Warning |
+| `gpu_spike` | Average GPU utilization > 90% over 15 minutes | Warning (Critical if > 98%) |
+| `node_loss` | Node count dropped vs. the 15-minute maximum | Critical |
+| `utilization_drop` | Single-interval drop > 30 points and current util < 50% | Warning |
+
+#### Dashboard widget
+
+Open anomalies appear in a collapsible **Anomalies GPU** panel at the top of the Dashboard tab:
+
+- Severity badge (WARNING / CRITICAL) and anomaly type
+- Cluster name and human-readable description
+- Detection timestamp
+- **Resolve** button — closes the event manually once you have investigated
+
+The badge shows the count of open (unresolved) events. It reloads automatically when you open the dashboard.
+
+#### Notifications
+
+When an anomaly is created, VibOps dispatches a notification to all configured channels (Slack, webhook, email, PagerDuty) using the same channel infrastructure as alert rules.
+
+#### API
+
+```
+GET  /api/v1/anomalies               — list recent events (filters: cluster, type, severity, open_only)
+GET  /api/v1/anomalies/open          — open events only
+POST /api/v1/anomalies/{id}/resolve  — manually resolve (org_admin)
+```
+
+#### Deduplication and auto-resolution
+
+- If an open event of the same type already exists for a cluster, no duplicate is created.
+- Once the condition clears (e.g. utilization rises back above 10%), the open event is automatically marked as resolved at the next scan.
+
+---
+
+### Live Workload Cost Attribution
+
+The **Live Cost** panel in the FinOps → Workloads tab shows real-time cost attribution for every currently running workload.
+
+**Formula:**
+
+```
+estimated_cost_usd = elapsed_hours × gpu_count × rate_per_gpu_hour
+```
+
+The rate is resolved from the cluster's [ClusterRate](#pricing-and-cluster-rates) configuration (cloud formula or on-prem formula). If no rate is configured, a default of $2.00/GPU/hr is used.
+
+#### Reading the panel
+
+Select a cluster in the Workloads section filter — the Live Cost panel appears above the historical table:
+
+| Column | Description |
+|--------|-------------|
+| **Workload** | Pod name or Slurm job ID (last 16 characters) |
+| **Namespace** | Kubernetes namespace or Slurm partition |
+| **GPU** | Number of GPUs allocated |
+| **Duration** | Elapsed time since workload started |
+| **Estimated cost** | elapsed × GPUs × rate |
+
+Workloads are sorted by cost descending — the most expensive workloads appear first.
+
+The panel also shows:
+- **Total estimated cost** across all running workloads on the cluster
+- **Running workloads count**
+
+Click **↺** to refresh at any time. Data is computed live — no caching.
+
+#### API
+
+```
+GET /api/v1/finops/workloads/live-cost?cluster=<name>
+```
+
+Returns `running_workloads`, `total_estimated_cost_usd`, `computed_at`, and a `workloads` array.
 
 ---
 
