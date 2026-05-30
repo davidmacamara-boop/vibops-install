@@ -17,6 +17,7 @@
 6. [Talking to the agent](#6-talking-to-the-agent)
    - [How to phrase a request](#how-to-phrase-a-request)
    - [What the agent can do](#what-the-agent-can-do)
+   - [Agent Catalog — explore and configure tools](#agent-catalog--explore-and-configure-tools)
    - [Production safety guardrails](#production-safety-guardrails)
    - [Cross-session memory](#cross-session-memory)
 7. [Kubernetes cluster management](#7-kubernetes-cluster-management)
@@ -36,6 +37,7 @@
     - [Members](#members)
     - [Per-cluster roles (overrides)](#per-cluster-roles-overrides)
     - [Secrets](#secrets)
+    - [Tool policy](#tool-policy)
     - [Notifications](#notifications)
     - [Integrations](#integrations)
     - [Audit](#audit)
@@ -407,6 +409,50 @@ What has changed on our clusters in the last 2 hours?
 | **Slurm HPC** | Submit multi-node GPU training jobs on bare-metal Slurm clusters, monitor progress, tail logs, cancel jobs |
 | **SLO & alerts** | Define SLOs, create triggers, configure Slack alerts |
 | **Audit** | View the full history of all operations with who/what/when |
+
+### Agent Catalog — explore and configure tools
+
+The **Agents tab** exposes the full list of actions the agent can execute. Click any action to open a details drawer.
+
+#### Browsing the catalog
+
+Use the **"Search for an action"** field at the top to filter by name or keyword. The catalog displays:
+
+| Column | Description |
+|--------|-------------|
+| **Action** | Technical name (e.g. `accelerator_get_metrics`) |
+| **Connector** | Source connector (e.g. `Nvidia`, `Kubectl`, `Helm`) |
+| **Role** | Minimum role required to execute this action |
+| **Destructive** | ⚠ badge if the action modifies or deletes resources |
+| **Confirmation** | Whether the agent asks for confirmation before executing |
+| **Approval** | Whether an external approval workflow is triggered |
+
+#### Schema drawer
+
+Click any row to open the **schema drawer** on the right. It shows:
+
+- **Description** — what the action does
+- **Input parameters** — name, type (string / integer / boolean / array / object), required vs optional, accepted enum values
+- **Override status** — a badge indicates if your org has an active policy override on this action
+
+This allows you to understand exactly what parameters the agent will use when executing an action, and anticipate what information to provide in your prompt.
+
+#### Configure tool policy (org admins only)
+
+Org admins see two additional toggles at the bottom of the drawer:
+
+| Toggle | Effect when enabled |
+|--------|---------------------|
+| **Requires confirmation** | The agent pauses and displays a confirmation prompt before executing this action, even if it is not destructive by default |
+| **Requires external approval** | Execution is blocked until a human approves the request in an external system (e.g. Slack, PagerDuty, ITSM) |
+
+These overrides are **per-org** and **per-action** — they do not affect other organizations. Changes take effect immediately and are recorded in the audit log.
+
+**Example use case:** your org wants confirmation before any `helm_upgrade` in production, even though VibOps does not classify it as destructive by default. Enable "Requires confirmation" on `helm_upgrade` — from that point on, the agent will always pause and ask before running it.
+
+> **Note:** overrides supplement the connector defaults. Removing an override reverts the action to its built-in behavior.
+
+---
 
 ### Production safety guardrails
 
@@ -1264,6 +1310,49 @@ The agent automatically resolves `@secret:<name>` before sending the request to 
 - Click the trash 🗑 to delete (irreversible — jobs that reference this secret will fail afterwards)
 
 > **System secrets**: some secrets are marked `system` — they are shared between organizations by the VibOps team for reselling scenarios. Do not modify them unless explicitly instructed.
+
+---
+
+### Tool policy
+
+_(Org admins only)_
+
+The **Tool policy** sub-tab lets you override the default confirmation and approval rules for any action in the agent catalog — at the organization level.
+
+**How it works:**
+
+Each action in VibOps has two safety flags defined by its connector:
+
+| Flag | Default behavior |
+|------|-----------------|
+| `requires_confirmation` | Agent pauses and asks before executing |
+| `requires_external_approval` | Execution is blocked until an external system approves |
+
+By default, only destructive actions require confirmation. Tool policy lets you raise the bar for your organization's specific risk appetite.
+
+**To configure an action:**
+
+1. Admin → **Tool policy** sub-tab (or open the action drawer from the **Agents** tab)
+2. Find the action you want to adjust (use the search field)
+3. Toggle **Requires confirmation** and/or **Requires external approval**
+4. Changes apply immediately — no restart needed
+
+**Behavior of overrides:**
+
+- Overrides are **per-org** — your configuration does not affect other tenants
+- Overrides are **per-action** — you can configure each action independently
+- Setting a toggle to the connector default removes the override (the row shows no "override active" badge)
+- All changes are recorded in the **Audit** log with the admin's identity and timestamp
+
+**Example policies:**
+
+| Goal | Configuration |
+|------|--------------|
+| Always confirm before `helm_upgrade` | Enable confirmation on `helm_upgrade` |
+| Route all scaling decisions through ITSM | Enable external approval on `scale_deployment` |
+| Add a second confirmation step for MIG partitioning | Enable confirmation on `accelerator_partition_device` |
+
+> **Non-admin users** see the current confirmation/approval state for each action as read-only badges in the catalog drawer — they cannot change it.
 
 ---
 

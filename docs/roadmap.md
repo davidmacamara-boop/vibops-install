@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-05-12 · v0.17.5_
+_Last updated: 2026-05-30 · v0.17.5-sprint1_
 
 ## Principles
 
@@ -134,6 +134,15 @@ _Last updated: 2026-05-12 · v0.17.5_
 - [x] Console Workloads sub-tab in FinOps panel
 - [x] Console gateway form — gateway_type select, Slurm config section, prometheus_url field
 - [x] ADR 0024 — Slurm workload collector (transport hierarchy, GRES parsing, secret management)
+
+### Agent Catalog UX & Tool Policy (Sprint 1 — 2026-05-30)
+- [x] **OPS-A01** — Agent Catalog schema drawer: click any action to view its full input schema (description, typed parameters, required/optional fields, enum values)
+- [x] **OPS-D01** — Per-org `requires_confirmation` policy override — org admins can force confirmation on any action regardless of connector default
+- [x] **OPS-E03** — Per-org `requires_external_approval` policy override — route any action through external approval workflow
+- [x] **OPS-E06** — `ToolPolicyOverride` model + `PATCH /api/v1/catalog/{action}` endpoint — persistent, audited, per-org policy storage
+- [x] Action search field: replaced `<input>` with `<div contenteditable>` — browsers no longer autofill the search box
+- [x] Security: `starlette==0.47.2` pinned, PYSEC-2026-161 tracked (blocked by `prometheus-fastapi-instrumentator` starlette<1.0.0 ceiling)
+- [x] CI: all connector test warnings eliminated (`pf_proc.terminate` AsyncMock → MagicMock)
 
 ### MCP Server (`VibOpsai/vibops-mcp`)
 - [x] 16 observation tools — clusters, deployments, jobs, GPU metrics, MTTR, cost, gateways, alerts, pipelines…

@@ -1,12 +1,12 @@
 # VibOps — API Reference
 
-_Last updated: 2026-05-12 · v0.17.5_
+_Last updated: 2026-05-30 · v0.17.5-sprint1_
 
 This document covers the **key endpoints** for integration and technical qualification. It is
 organized by functional domain, with curl examples for each operation.
 
 **Interactive reference (Swagger UI):** `https://<host>/docs`  
-**Machine-readable spec:** `docs/openapi.json` (OpenAPI 3.1 — 132 endpoints, auto-generated)  
+**Machine-readable spec:** `docs/openapi.json` (OpenAPI 3.1 — 134 endpoints, auto-generated)  
 **Full redoc:** `https://<host>/redoc`
 
 ---
@@ -688,6 +688,77 @@ Returns cost metrics (estimated hourly/daily GPU spend per cluster).
 ### `GET /api/v1/metrics/mttr`
 
 Returns mean time to recovery metrics from the incident history.
+
+---
+
+## Agent Catalog
+
+### `GET /api/v1/catalog`
+
+Returns all registered actions across all connectors, merged with any per-org policy overrides.  
+Access: any authenticated user (viewer+).
+
+```bash
+curl -s https://<host>/api/v1/catalog \
+  -H "Authorization: Bearer <token>" | jq .
+```
+
+Response:
+```json
+{
+  "total": 162,
+  "tools": [
+    {
+      "action": "accelerator_get_metrics",
+      "connector": "Nvidia",
+      "description": "Collect live GPU utilization, memory, temperature and power from DCGM.",
+      "required_role": "viewer",
+      "destructive": false,
+      "requires_confirmation": false,
+      "requires_external_approval": false,
+      "overridden": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "node": { "type": "string", "description": "Filter by node name (optional)" }
+        }
+      }
+    }
+  ]
+}
+```
+
+`overridden: true` means your org has an active policy override on this action.
+
+---
+
+### `PATCH /api/v1/catalog/{action}`
+
+Create or update the per-org policy override for a specific action.  
+Access: `org_admin` only. Passing `null` for a flag removes that override (reverts to connector default).
+
+```bash
+# Force confirmation before helm_upgrade for this org
+curl -s -X PATCH https://<host>/api/v1/catalog/helm_upgrade \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"requires_confirmation": true}' | jq .
+
+# Remove the confirmation override (revert to connector default)
+curl -s -X PATCH https://<host>/api/v1/catalog/helm_upgrade \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"requires_confirmation": null}' | jq .
+```
+
+Body fields (all optional):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `requires_confirmation` | `boolean \| null` | Override confirmation flag; `null` removes the override |
+| `requires_external_approval` | `boolean \| null` | Override approval flag; `null` removes the override |
+
+Returns the full `ToolEntry` object with updated values and `"overridden": true`.
 
 ---
 
