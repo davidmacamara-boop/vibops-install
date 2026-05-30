@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-05-30 · v0.17.5-sprint2_
+_Last updated: 2026-05-30 · v0.17.5-sprint3_
 
 ## Principles
 
@@ -150,6 +150,13 @@ _Last updated: 2026-05-30 · v0.17.5-sprint2_
 - [x] **#2** — Tag-based search in Agent Catalog: `ToolSpec.tags` field + `_CONNECTOR_TAGS` fallback mapping (25 connectors), tag dropdown filter, clickable tag chips, `?tag=` query param on `GET /catalog`
 - [x] **#6** — Declarative YAML policy format + OPA/Rego compatibility (ADR 0026): `org_policy_rules` table, `PUT /api/v1/policy`, YAML rules with `deny`/`require_confirmation`/`require_approval`/`require_role`/`allow` effects, match conditions (action glob, namespace, env, cluster, replicas comparisons), OPA sidecar mode via `OPA_URL`
 - [x] CI: pre-commit hook auto-regenerates `docs/openapi.json` and stages it — no more manual regen after schema changes
+
+### AgentOps Sprint 3 — Execution History, Session Replay, LLM-as-Judge (2026-05-30)
+- [x] **#1** — Action execution history per tool: `GET /api/v1/catalog/{action}/history` returns total/success/failure counts, success rate, average duration, and the 20 most recent runs — surfaced in the catalog schema drawer
+- [x] **#3** — Session replay: click any job in the history to open a step-by-step replay modal — each tool call is shown with its input, output, timestamp, and duration; long jobs are paginated (20 steps per page)
+- [x] **#4** — LLM-as-judge evaluation: `EvalRubric` + `JobEvaluation` models, async Celery eval task, full CRUD API (`/eval/rubrics`, `/eval/evaluations`); rubrics define weighted criteria and a scoring prompt; evaluation is triggered from the replay modal; results (score 0–1, per-criterion scores, justification) are stored and displayed inline
+- [x] **#4** — Multi-provider LLM judge: provider `"vibops"` (default) inherits `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL` from env — evaluations automatically use the same LLM as the agent (Anthropic, vLLM, Groq, Together, Ollama…); explicit `"claude"`, `"openai"`, `"ollama"` providers also supported per rubric
+- [x] Admin → **Eval Rubrics** sub-tab: create rubrics, define criteria with weights, choose LLM provider/model; rubrics list with run counts
 
 ### MCP Server (`VibOpsai/vibops-mcp`)
 - [x] 16 observation tools — clusters, deployments, jobs, GPU metrics, MTTR, cost, gateways, alerts, pipelines…

@@ -18,6 +18,7 @@
    - [How to phrase a request](#how-to-phrase-a-request)
    - [What the agent can do](#what-the-agent-can-do)
    - [Agent Catalog — explore and configure tools](#agent-catalog--explore-and-configure-tools)
+   - [Session Replay](#session-replay)
    - [Production safety guardrails](#production-safety-guardrails)
    - [Cross-session memory](#cross-session-memory)
 7. [Kubernetes cluster management](#7-kubernetes-cluster-management)
@@ -38,6 +39,9 @@
     - [Per-cluster roles (overrides)](#per-cluster-roles-overrides)
     - [Secrets](#secrets)
     - [Tool policy](#tool-policy)
+    - [Approvals](#approvals)
+    - [Org Policy (declarative YAML)](#org-policy-declarative-yaml)
+    - [LLM Evaluation Rubrics](#llm-evaluation-rubrics-admin-only)
     - [Notifications](#notifications)
     - [Integrations](#integrations)
     - [Audit](#audit)
@@ -447,6 +451,21 @@ Click any row to open the **schema drawer** on the right. It shows:
 
 This allows you to understand exactly what parameters the agent will use when executing an action, and anticipate what information to provide in your prompt.
 
+#### Execution history
+
+The bottom of the schema drawer shows the execution history for this action in your organization:
+
+| Metric | Description |
+|--------|-------------|
+| **Total runs** | Number of times this action was executed by your org |
+| **Success rate** | Percentage of runs that completed without error |
+| **Avg duration** | Average execution time across all runs |
+| **Recent runs** | Up to 20 most recent executions — status, timestamp, who ran it |
+
+Click any run row to open the [Session Replay](#session-replay) modal and inspect every step in detail.
+
+---
+
 #### Configure tool policy (org admins only)
 
 Org admins see two additional toggles at the bottom of the drawer:
@@ -461,6 +480,40 @@ These overrides are **per-org** and **per-action** — they do not affect other 
 **Example use case:** your org wants confirmation before any `helm_upgrade` in production, even though VibOps does not classify it as destructive by default. Enable "Requires confirmation" on `helm_upgrade` — from that point on, the agent will always pause and ask before running it.
 
 > **Note:** overrides supplement the connector defaults. Removing an override reverts the action to its built-in behavior.
+
+---
+
+### Session Replay
+
+The **Session Replay** modal reconstructs any past job execution step by step, so you can understand exactly what happened, why it succeeded or failed, and what the agent did at each stage.
+
+#### How to open a replay
+
+1. In the **Agent Catalog** schema drawer → click a row in the Recent Runs list
+2. In the **Jobs** history panel (Dashboard or Chat) → click any job row
+3. From the **Replay footer** → click **⊲ Replay** on any job result
+
+#### Replay view
+
+The modal shows:
+- **Header**: action name, job ID, final status, start time, total duration
+- **Step list** (left panel): numbered steps, each with a tool name, status badge, and relative timestamp
+- **Step detail** (right panel): when you click a step —
+  - **Input**: the parameters passed to the tool
+  - **Output**: the full result returned
+  - **Duration**: how long this step took
+  - **Error**: if the step failed, the full error message
+
+Long jobs (>20 steps) are paginated — use **‹ Prev** / **Next ›** to navigate.
+
+#### LLM evaluation from replay
+
+At the bottom of the replay modal, an **Evaluate** section lets you run an LLM-as-judge evaluation:
+1. Select a rubric from the dropdown
+2. Click **⚖ Evaluate** — the evaluation runs asynchronously
+3. Results appear in the **LLM Evaluations** section: overall score (0–1), per-criterion scores, and a text justification
+
+See [LLM Evaluation Rubrics](#llm-evaluation-rubrics-admin-only) for rubric configuration.
 
 ---
 
@@ -1501,6 +1554,55 @@ Set `OPA_URL` in the server environment to point to your OPA sidecar. If `OPA_UR
 4. To start from scratch, click **Remove policy** — all decisions revert to catalog defaults
 
 A **starter example** is displayed when no policy is set.
+
+---
+
+### LLM Evaluation Rubrics (admin only)
+
+The **Eval Rubrics** sub-tab lets you define how job executions should be scored by an LLM judge. This enables systematic, reproducible quality measurement across your infrastructure operations — useful for compliance, team coaching, or continuous improvement.
+
+#### Creating a rubric
+
+1. Admin → **Eval** sub-tab → **+ New rubric**
+2. Fill in:
+   - **Name**: a short identifier (e.g. `production-safety`, `correctness-check`)
+   - **Description**: what this rubric measures
+   - **Provider**: which LLM runs the evaluation (see table below)
+   - **Model**: model name — leave empty to use `LLM_MODEL` from the environment
+3. Add **criteria**: each criterion has a name, description, and weight (relative importance)
+4. Click **Create rubric**
+
+#### LLM providers for evaluation
+
+| Provider | Description |
+|----------|-------------|
+| **VibOps** (default) | Inherits `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL` from the environment — uses the same LLM as the agent automatically |
+| **Claude** | Anthropic API (`LLM_API_KEY` or `ANTHROPIC_API_KEY`) |
+| **OpenAI / vLLM / Groq** | Any OpenAI-compatible endpoint — reads `LLM_BASE_URL` + `LLM_API_KEY` |
+| **Ollama** | Local Ollama instance (`OLLAMA_URL`) |
+
+> **Recommendation:** keep the default `VibOps` provider. If you change the agent's LLM, evaluations automatically follow without editing rubrics.
+
+#### Criteria
+
+Each criterion is scored 0.0 to 1.0. A weighted aggregate is computed. Typical criteria:
+
+| Name | Description | Example weight |
+|------|-------------|----------------|
+| `correctness` | Did the action achieve its stated goal? | 0.5 |
+| `safety` | Were destructive flags and dry-run previews respected? | 0.3 |
+| `efficiency` | Was the execution concise with no unnecessary steps? | 0.2 |
+
+#### Running an evaluation
+
+Evaluations are triggered from the [Session Replay](#session-replay) modal:
+1. Open any job replay
+2. Select a rubric in the **Evaluate** footer
+3. Click **⚖ Evaluate** — the task runs asynchronously in a Celery worker
+4. Status cycles: `pending → running → completed` (or `failed`)
+5. Results appear inline: overall score, per-criterion scores, LLM justification
+
+Evaluation results are stored in the database and accessible via `GET /api/v1/eval/evaluations?job_id={id}`.
 
 ---
 
