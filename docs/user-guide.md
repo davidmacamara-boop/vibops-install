@@ -416,16 +416,26 @@ The **Agents tab** exposes the full list of actions the agent can execute. Click
 
 #### Browsing the catalog
 
-Use the **"Search for an action"** field at the top to filter by name or keyword. The catalog displays:
+Use the **"Search for an action"** field at the top to filter by name or keyword. A **tag dropdown** lets you filter by technology category (e.g. `kubernetes`, `gpu`, `inference`, `gitops`). The catalog displays:
 
 | Column | Description |
 |--------|-------------|
 | **Action** | Technical name (e.g. `accelerator_get_metrics`) |
 | **Connector** | Source connector (e.g. `Nvidia`, `Kubectl`, `Helm`) |
 | **Role** | Minimum role required to execute this action |
+| **Tags** | Technology category chips — click any chip to filter the catalog to that tag |
 | **Destructive** | ⚠ badge if the action modifies or deletes resources |
 | **Confirmation** | Whether the agent asks for confirmation before executing |
 | **Approval** | Whether an external approval workflow is triggered |
+
+**Filtering by tag:**
+
+1. Click the **tag dropdown** next to the search field
+2. Select a tag (e.g. `gpu`, `kubernetes`, `inference`)
+3. The catalog narrows to actions in that category
+4. Click **Clear** or select **All tags** to reset
+
+Tags are derived from the connector name when not explicitly set (e.g. `Kubectl` → `kubernetes`, `compute`; `Nvidia` → `gpu`, `nvidia`, `compute`).
 
 #### Schema drawer
 
@@ -1362,6 +1372,135 @@ The Tool policy table lists all 160+ actions across every registered connector. 
 | Enforce approval before any cluster deletion | `delete_cluster` | Approval ON |
 
 > **Non-admin users** see confirmation/approval state as read-only information in the Agent Catalog drawer — they cannot change it.
+
+---
+
+### Approvals
+
+_(Org admins only)_
+
+When an action has **Approval** enabled (either via the Tool Policy toggles or the Org Policy YAML), VibOps creates an **approval gate** before the job executes. The gate blocks execution until an admin approves or rejects it.
+
+#### Approval notifications
+
+VibOps automatically notifies all active notification channels when an approval gate is created:
+
+- **Slack**: an interactive message with **Approve** and **Reject** URL buttons (Block Kit format). Clicking the button opens a confirmation page — no Slack app installation required.
+- **HTTP webhook / email / PagerDuty**: a structured message with the approval and rejection URLs.
+
+The notification includes: the action name, the user who triggered it, a dry-run preview (if available), and the expiry time of the gate.
+
+#### Managing approvals in the console
+
+Admins can approve or reject pending gates directly in the console:
+
+1. Admin → **Approvals** sub-tab
+2. The table shows all pending gates: action, triggered by, created at, expiry
+3. Click **Approve** to allow execution — the job immediately transitions to `queued`
+4. Click **Reject** to block execution — optionally enter a reason
+
+> Gates expire automatically after 24 hours. Expired gates cannot be approved.
+
+#### Approval flow summary
+
+```
+User submits action
+       ↓
+PolicyEngine → approval required
+       ↓
+Job created (state: AWAITING_APPROVAL)
+       ↓
+Notifications sent to all active channels
+       ↓
+Admin approves (console or Slack/webhook URL)
+       ↓
+Job transitions to QUEUED → executes
+```
+
+---
+
+### Org Policy (declarative YAML)
+
+_(Org admins only)_
+
+The **Policy** sub-tab lets you define conditional access rules for your organization in YAML. These rules are evaluated **after** the connector role check and **before** the catalog approval gate — they can tighten or override catalog defaults without editing connector code.
+
+#### When to use Policy vs Tool Policy toggles
+
+| Use case | Recommended approach |
+|----------|---------------------|
+| Toggle confirmation/approval on a specific action | Tool Policy toggles (simpler) |
+| Conditional rule: block an action only in a specific namespace | Org Policy YAML |
+| Block all actions in `prod` except for admins | Org Policy YAML |
+| Require approval for scale operations above a threshold | Org Policy YAML |
+| OPA/Rego integration for enterprise policy-as-code | Org Policy YAML (mode: rego) |
+
+#### YAML schema
+
+```yaml
+version: "1"
+rules:
+  - name: "protect-prod-delete"       # unique name (required)
+    match:
+      action: "kubectl_delete"        # exact or glob (* = any action)
+      namespace: "prod"               # payload.namespace equality or glob
+      env: "production"               # payload.env equality
+      cluster: "gpu-prod-*"           # payload.cluster glob
+      replicas_gt: 8                  # payload.replicas > 8
+    effect: "deny"                    # see effects table below
+    reason: "Production deletions blocked — open a change ticket"
+    value: "admin"                    # role name for require_role effect
+```
+
+**Match conditions** (all optional, ANDed):
+
+| Field | Type | Matches |
+|-------|------|---------|
+| `action` | string/glob | Action name (`kubectl_delete`, `helm_*`, `*`) |
+| `namespace` | string/glob | `payload.namespace` |
+| `env` | string | `payload.env` |
+| `cluster` | string/glob | `payload.cluster` or `payload.context` |
+| `replicas_gt/gte/lt/lte` | integer | Numeric comparison on `payload.replicas` |
+
+**Effects:**
+
+| Effect | What happens |
+|--------|-------------|
+| `deny` | Hard block — HTTP 403, reason shown to the user |
+| `require_confirmation` | Dry-run preview shown, `confirmed: true` required |
+| `require_approval` | Approval gate created, external notification sent |
+| `require_role` | Denied unless the user has the role specified in `value` (`viewer`/`operator`/`admin`) |
+| `allow` | Explicit allow — skips the catalog approval gate |
+
+Rules are evaluated **in order** — first match wins.
+
+#### OPA/Rego mode
+
+For organizations with an existing OPA deployment:
+
+```yaml
+version: "1"
+mode: "rego"
+body: |
+  package vibops.policy
+  default allow = true
+  deny[msg] {
+    input.payload.namespace == "prod"
+    input.action == "kubectl_delete"
+    msg := "Production deletions are blocked"
+  }
+```
+
+Set `OPA_URL` in the server environment to point to your OPA sidecar. If `OPA_URL` is not set, the Rego policy falls through to catalog defaults (with a warning logged).
+
+#### Editing the policy
+
+1. Admin → **Policy** sub-tab
+2. Edit the YAML in the editor
+3. Click **Save policy** — the YAML is validated before saving (errors shown inline)
+4. To start from scratch, click **Remove policy** — all decisions revert to catalog defaults
+
+A **starter example** is displayed when no policy is set.
 
 ---
 

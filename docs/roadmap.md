@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-05-30 · v0.17.5-sprint1_
+_Last updated: 2026-05-30 · v0.17.5-sprint2_
 
 ## Principles
 
@@ -143,6 +143,13 @@ _Last updated: 2026-05-30 · v0.17.5-sprint1_
 - [x] Action search field: replaced `<input>` with `<div contenteditable>` — browsers no longer autofill the search box
 - [x] Security: `starlette==0.47.2` pinned, PYSEC-2026-161 tracked (blocked by `prometheus-fastapi-instrumentator` starlette<1.0.0 ceiling)
 - [x] CI: all connector test warnings eliminated (`pf_proc.terminate` AsyncMock → MagicMock)
+
+### AgentOps Sprint 2 — Approvals, Tag Search, Declarative Policy (2026-05-30)
+- [x] **#5** — Async approval notifications: `ChannelService.notify_approval_request()` dispatches to all active org channels (Slack Block Kit with Approve/Reject URL buttons, HTTP webhook, email, PagerDuty)
+- [x] **#5** — Admin Approvals console sub-tab: list pending approval gates, approve/reject directly from the console (JWT-authenticated `POST /approvals/{gate_id}/approve|reject`)
+- [x] **#2** — Tag-based search in Agent Catalog: `ToolSpec.tags` field + `_CONNECTOR_TAGS` fallback mapping (25 connectors), tag dropdown filter, clickable tag chips, `?tag=` query param on `GET /catalog`
+- [x] **#6** — Declarative YAML policy format + OPA/Rego compatibility (ADR 0026): `org_policy_rules` table, `PUT /api/v1/policy`, YAML rules with `deny`/`require_confirmation`/`require_approval`/`require_role`/`allow` effects, match conditions (action glob, namespace, env, cluster, replicas comparisons), OPA sidecar mode via `OPA_URL`
+- [x] CI: pre-commit hook auto-regenerates `docs/openapi.json` and stages it — no more manual regen after schema changes
 
 ### MCP Server (`VibOpsai/vibops-mcp`)
 - [x] 16 observation tools — clusters, deployments, jobs, GPU metrics, MTTR, cost, gateways, alerts, pipelines…
