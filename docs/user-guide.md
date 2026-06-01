@@ -474,14 +474,15 @@ Org admins see two additional toggles at the bottom of the drawer:
 
 | Toggle | Effect when enabled |
 |--------|---------------------|
-| **Requires confirmation** | The agent pauses and displays a confirmation prompt before executing this action, even if it is not destructive by default |
+| **Requires confirmation** | VibOps blocks execution at the platform level and returns a 409 gate — the agent must obtain explicit confirmation before retrying. Enforced regardless of which LLM is configured. |
 | **Requires external approval** | Execution is blocked until a human approves the request in an external system (e.g. Slack, PagerDuty, ITSM) |
 
 These overrides are **per-org** and **per-action** — they do not affect other organizations. Changes take effect immediately and are recorded in the audit log.
 
-**Example use case:** your org wants confirmation before any `helm_upgrade` in production, even though VibOps does not classify it as destructive by default. Enable "Requires confirmation" on `helm_upgrade` — from that point on, the agent will always pause and ask before running it.
+**Example use case:** your org wants confirmation before any `helm_upgrade` in production, even though VibOps does not classify it as destructive by default. Enable "Requires confirmation" on `helm_upgrade` — from that point on, VibOps will always block and ask before running it, even if the LLM would have executed silently.
 
 > **Note:** overrides supplement the connector defaults. Removing an override reverts the action to its built-in behavior.
+> **LLM-agnostic guarantee:** the Confirmation gate is enforced by the policy engine (HTTP 409), not by the LLM's own judgment. It works identically whether VibOps is connected to Claude, GPT-4o, Mistral, or any other model.
 
 ---
 
@@ -1386,12 +1387,14 @@ The **Tool policy** sub-tab lets you override the default confirmation and appro
 
 **Understanding the two safety flags:**
 
-| Flag | What it does | Scope |
-|------|-------------|-------|
-| **Confirmation** | Before executing, the agent shows a dry-run preview and waits for the operator to type `confirmed: true` in the chat. Everything happens inside the conversation. | In-conversation |
-| **Approval** | VibOps sends a notification (Slack, email, webhook) to a person or external system. The job stays in `pending_approval` state until they click Approve or Reject. The operator in chat does not have a say. | Out-of-band |
+| Flag | What it does | Enforced by | Scope |
+|------|-------------|-------------|-------|
+| **Confirmation** | VibOps blocks the job at the platform level (HTTP 409) and returns a dry-run preview. The agent must send `confirmed: true` to proceed. Works with any LLM — the gate is at the infrastructure layer, not the model layer. | Policy engine | In-conversation |
+| **Approval** | VibOps sends a notification (Slack, email, webhook) to a person or external system. The job stays in `pending_approval` state until they click Approve or Reject. The operator in chat does not have a say. | Policy engine | Out-of-band |
 
 Both flags can be active simultaneously: the agent presents the dry-run and waits for in-chat confirmation, **and** sends an external approval request — the job only runs when both are satisfied.
+
+> **Why platform-level enforcement matters:** some LLMs may execute actions without asking for confirmation. The Confirmation gate is a hard stop at the infrastructure layer — even if the LLM skips the question, the platform returns 409 and nothing runs until the user explicitly confirms.
 
 **The table**
 
@@ -1436,6 +1439,14 @@ _(Org admins only)_
 
 When an action has **Approval** enabled (either via the Tool Policy toggles or the Org Policy YAML), VibOps creates an **approval gate** before the job executes. The gate blocks execution until an admin approves or rejects it.
 
+#### What the user sees in the chat
+
+When a job enters `AWAITING_APPROVAL`, the agent immediately informs the user — regardless of which LLM is configured (Claude, GPT-4o, Mistral, Ollama, etc.):
+
+> *"This action requires admin approval before it can be executed. Your request has been submitted and is pending review. You will be notified once a decision has been made."*
+
+The agent does not poll or retry — the conversation closes cleanly. This message is returned as a structured tool result, so any LLM interprets and relays it to the user in natural language.
+
 #### Approval notifications
 
 VibOps automatically notifies all active notification channels when an approval gate is created:
@@ -1465,9 +1476,11 @@ PolicyEngine → approval required
        ↓
 Job created (state: AWAITING_APPROVAL)
        ↓
-Notifications sent to all active channels
+Agent informs user in chat: "pending admin approval" ← any LLM
        ↓
-Admin approves (console or Slack/webhook URL)
+Notifications sent to all active channels (Slack, email, webhook)
+       ↓
+Admin approves (console or Slack/webhook URL)      ← async, out-of-band
        ↓
 Job transitions to QUEUED → executes
 ```
@@ -2311,6 +2324,272 @@ The preference is saved locally and applied to both interface labels and agent r
 | `User limit reached` | Maximum number of users reached for your plan | Upgrade the plan or delete inactive accounts |
 | `Licence expired` | License expired | Contact david@vibops.ai |
 | `No Prometheus configured` | Metrics not available | See Admin → Integrations → Prometheus |
+
+---
+
+## Sprint 5 — Compliance, SSO, Agent Identity, Dependency Graph
+
+### Agent Identity Lifecycle
+
+Machine identities for automated agents, CI/CD pipelines, and service accounts — no shared passwords, no personal API tokens in CI.
+
+#### Creating an identity
+
+Navigate to **Admin → Agent Identities** and click **Create identity**. Enter a name (e.g. `GitHub Actions — prod`). The raw API key is shown **once** — copy it immediately.
+
+```
+POST /api/v1/agent-identities
+{
+  "name": "GitHub Actions — prod",
+  "description": "Deploys inference services from CI"
+}
+```
+
+Response includes `key` (raw value, shown once), `key_prefix` (e.g. `vib_k3f9a2…`), and `id`.
+
+#### Rotating a key
+
+Key rotation generates a new raw key and invalidates the old one. The previous key stops working immediately.
+
+```
+POST /api/v1/agent-identities/{id}/rotate
+```
+
+The response includes the new `key`. Update your CI secrets before confirming the rotation.
+
+#### Revoking an identity
+
+Revocation permanently invalidates the key. The identity record is preserved for audit purposes.
+
+```
+POST /api/v1/agent-identities/{id}/revoke
+```
+
+A revoked identity cannot be rotated — create a new one if needed.
+
+#### Listing identities
+
+```
+GET /api/v1/agent-identities
+```
+
+Returns `items` (list) and `total`. Each item shows `key_prefix`, `is_revoked`, `created_at`, `rotated_at`, `last_used_at`.
+
+---
+
+### Compliance Reports (SOC 2 · GDPR · HIPAA)
+
+VibOps generates evidence packages by analyzing your audit log for the requested reporting period. Reports are generated asynchronously — status goes from `pending` to `ready` (or `failed`) in the background.
+
+#### Generating a report
+
+Navigate to **Admin → Compliance → Reports** and click **Generate report**, or via API:
+
+```
+POST /api/v1/compliance/reports
+{
+  "report_type": "soc2",
+  "period": "2026-Q1"
+}
+```
+
+Supported `report_type` values: `soc2`, `gdpr`, `hipaa`.
+
+Supported `period` formats:
+- `2026-Q1` — quarter
+- `2026-05` — month
+- `2026` — full year
+
+#### Reading a report
+
+```
+GET /api/v1/compliance/reports/{id}
+```
+
+The `summary` field contains findings organized by standard:
+
+**SOC 2** — CC6 (audit trail completeness), CC7 (monitoring), CC8 (change management). Each control is `compliant`, `partial`, or lists specific findings with severity.
+
+**GDPR** — Art17 (right to erasure), data minimization, access control. Partial findings flag areas requiring additional controls outside VibOps.
+
+**HIPAA** — Audit controls, access control, transmission security safeguards.
+
+#### Listing reports
+
+```
+GET /api/v1/compliance/reports?report_type=soc2
+```
+
+---
+
+### EU AI Act Controls (Issue #7)
+
+VibOps maps its operational controls to the EU AI Act articles most relevant to GPU infrastructure operators. This is relevant for organizations whose VibOps-orchestrated workloads power high-risk AI systems.
+
+#### Seeding controls
+
+Initialize the 6 default articles for your organization (idempotent — safe to call multiple times):
+
+```
+POST /api/v1/compliance/ai-act/seed
+```
+
+Creates controls for: **Art9** (risk management), **Art12** (record-keeping), **Art13** (transparency), **Art14** (human oversight), **Art15** (accuracy & cybersecurity), **Art17** (quality management).
+
+#### Compliance score
+
+```
+GET /api/v1/compliance/ai-act/score
+```
+
+Returns:
+- `score` — weighted percentage (compliant=1.0, partial=0.5, non_compliant=0.0, not_applicable excluded)
+- `breakdown` — count per status
+- `applicable` — controls counted in the score
+
+#### Updating a control
+
+```
+PATCH /api/v1/compliance/ai-act/{id}
+{
+  "status": "compliant",
+  "notes": "VibOps audit log chain satisfies Art12 requirements.",
+  "evidence_url": "https://docs.vibops.ai/compliance/art12"
+}
+```
+
+Valid `status` values: `compliant`, `partial`, `non_compliant`, `not_applicable`.
+
+The console **Compliance → AI Act** tab shows all controls as cards with inline status dropdowns and notes fields.
+
+**VibOps built-in controls:**
+
+| Article | What VibOps covers |
+|---------|-------------------|
+| Art9 | Risk management — PolicyEngine default-deny, approval gates |
+| Art12 | Record-keeping — tamper-evident HMAC audit log chain |
+| Art13 | Transparency — every agent action is explainable and auditable |
+| Art14 | Human oversight — confirmation required for destructive actions |
+| Art15 | Robustness — dry-run preview, rollback on failure in pipelines |
+| Art17 | Quality management — CI test suite, migrations, semantic versioning |
+
+---
+
+### SSO / OIDC Integration (Issue #9)
+
+Org admins can configure an OIDC identity provider so users log in via their corporate SSO instead of (or in addition to) local passwords. Supports Azure AD, Okta, Google Workspace, and any compliant custom OIDC provider.
+
+#### Configuring SSO
+
+Navigate to **Admin → Security → SSO** and fill in the provider details, or via API:
+
+```
+PUT /api/v1/sso/config
+{
+  "oidc_provider": "okta",
+  "oidc_issuer_url": "https://acme.okta.com",
+  "oidc_client_id": "0oa1b2c3d4e5f6g7h8i9",
+  "oidc_client_secret": "<secret>",
+  "oidc_jit_provisioning": true,
+  "oidc_default_role": "member"
+}
+```
+
+The client secret is stored encrypted (Fernet / `VAULT_KEY`). The API only exposes whether a secret is set (`oidc_client_secret_set: true`) — it never returns the raw value.
+
+#### Enabling SSO
+
+Set all three required fields (`oidc_issuer_url`, `oidc_client_id`, `oidc_client_secret`) before enabling:
+
+```
+PUT /api/v1/sso/config
+{ "oidc_enabled": true }
+```
+
+Enabling SSO without the required fields returns HTTP 422.
+
+#### Supported providers
+
+| Provider | `oidc_provider` | Notes |
+|----------|----------------|-------|
+| Azure Active Directory | `azure_ad` | Tenant-aware — include tenant ID in `oidc_issuer_url` |
+| Okta | `okta` | Org URL as issuer |
+| Google Workspace | `google` | Standard Google OIDC |
+| Any OIDC-compliant IdP | `custom` | Provide full authorization and token endpoints in `oidc_issuer_url` |
+
+#### JIT user provisioning
+
+With `oidc_jit_provisioning: true` (default), users are created automatically on first SSO login with `oidc_default_role`. Set to `false` to require pre-created user accounts.
+
+#### OIDC flow
+
+1. User navigates to the console login page and clicks **Continue with SSO**
+2. VibOps redirects to `GET /api/v1/sso/oidc/login?org_slug=<slug>`
+3. Browser is redirected to the IdP authorization endpoint
+4. IdP redirects back to `GET /api/v1/sso/oidc/callback?code=…&state=…`
+5. VibOps exchanges the code for tokens, extracts email/name, JIT-provisions if needed, and returns a VibOps JWT
+
+#### Disabling SSO
+
+```
+DELETE /api/v1/sso/config
+```
+
+Clears all OIDC configuration and disables SSO. Existing users are unaffected.
+
+---
+
+### Agent Dependency Graph (Issue #11)
+
+VibOps tracks which agents call which LLM models, connectors, and sub-agents — forming a directed dependency graph per organization. This is useful for impact analysis (e.g. "if I change the model, which agents are affected?") and for understanding system architecture.
+
+#### Recording a dependency
+
+The agent loop records edges automatically. You can also record manually:
+
+```
+POST /api/v1/agents/dependencies
+{
+  "from_agent_id": "orchestrator-v2",
+  "from_agent_name": "VibOps Orchestrator",
+  "edge_type": "uses_model",
+  "to_node_id": "claude-opus-4-6",
+  "to_node_name": "Claude Opus 4.6",
+  "to_node_type": "model"
+}
+```
+
+`edge_type` values: `uses_model`, `uses_connector`, `calls_agent`
+
+`to_node_type` values: `model`, `connector`, `agent`
+
+Posting the same edge again increments `call_count` rather than creating a duplicate.
+
+#### Full org graph
+
+```
+GET /api/v1/agents/graph
+```
+
+Returns `nodes` (deduplicated, with `id`, `name`, `type`) and `edges` (with `call_count`, `first_seen_at`, `last_seen_at`).
+
+#### Agent-level view
+
+```
+GET /api/v1/agents/{agent_id}/dependencies
+```
+
+Returns all outbound edges from a specific agent, grouped by `edge_type`.
+
+#### Removing a stale edge
+
+```
+DELETE /api/v1/agents/dependencies/{edge_id}
+```
+
+The console **Admin → Agent Graph** panel renders the graph as a table of edges, sortable by call count and last seen timestamp.
+
+---
 
 ### Support
 

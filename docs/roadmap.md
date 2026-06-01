@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-05-30 · v0.17.5-sprint4_
+_Last updated: 2026-05-30 · v0.18.0-sprint5_
 
 ## Principles
 
@@ -181,6 +181,50 @@ _Last updated: 2026-05-30 · v0.17.5-sprint4_
 
 ---
 
+### AgentOps Sprint 5 — Compliance, SSO, Agent Lifecycle + Graph (2026-05-30)
+
+**Issue #7 — EU AI Act compliance controls mapping**
+- [x] `AIActControl` model — per-article compliance status (Art9/12/13/14/15/17)
+- [x] `POST /compliance/ai-act/seed` — idempotent seeding of the 6 core articles
+- [x] `GET /compliance/ai-act` + `GET /compliance/ai-act/score` — list + compliance score
+- [x] `PATCH /compliance/ai-act/{id}` — update status / notes / evidence URL
+- [x] Console Compliance tab — AI Act widget with article cards and inline status update
+
+**Issue #8 — SOC 2 / GDPR automated compliance report generation**
+- [x] `ComplianceReport` model — status (`pending` → `ready` | `failed`), JSON summary
+- [x] `POST /compliance/reports` — async generation via FastAPI BackgroundTasks
+- [x] Report analyzes AuditLog for SOC2 CC controls, GDPR articles, HIPAA safeguards
+- [x] `GET /compliance/reports` + `GET /compliance/reports/{id}` — list and detail
+- [x] Console report generation form + table with status badges
+
+**Issue #9 — SSO SAML/OIDC integration**
+- [x] OIDC columns on Organization model (provider, issuer, client_id, encrypted secret, JIT, default_role)
+- [x] `GET/PUT/DELETE /sso/config` — org admin OIDC configuration management
+- [x] `GET /sso/oidc/login` — initiate OIDC authorization code flow (browser redirect)
+- [x] `GET /sso/oidc/callback` — exchange code for token, JIT provision user, issue VibOps JWT
+- [x] Supported providers: `azure_ad`, `okta`, `google`, `custom`
+- [x] Console SSO tab — toggle, provider config form, status badge
+
+**Issue #10 — Agent identity lifecycle management**
+- [x] `AgentIdentity` model — Fernet-hashed API keys, rotation tracking, revocation
+- [x] `POST /agent-identities` — create identity (raw key shown once)
+- [x] `POST /agent-identities/{id}/rotate` — rotate key (new raw key shown once)
+- [x] `POST /agent-identities/{id}/revoke` — immediate revocation
+- [x] `DELETE /agent-identities/{id}` — hard delete
+- [x] Console Agent Identities tab — creation, rotation, revocation, deletion
+
+**Issue #11 — Agent dependency graph**
+- [x] `AgentDependencyEdge` model — directed graph: agent → model / connector / sub-agent
+- [x] `POST /agents/dependencies` — record/upsert edge (call_count incremented on repeat)
+- [x] `GET /agents/{agent_id}/dependencies` — edges from a specific agent
+- [x] `GET /agents/graph` — full org graph (nodes + edges for visualization)
+- [x] `DELETE /agents/dependencies/{id}` — prune stale edge
+- [x] Console graph panel — nodes and edges table
+
+**v0.18.0 — 5 issues closed, 28 new tests, 22 new API endpoints, 4 new Alembic migrations**
+
+---
+
 ## P1 — Backlog (prioritized)
 
 ### FinOps maturity
@@ -267,7 +311,7 @@ _Last updated: 2026-05-30 · v0.17.5-sprint4_
 ## P2 — Medium term
 
 ### Enterprise
-- [ ] SSO / SAML integration (required for large enterprise procurement)
+- ~~[ ] SSO / SAML integration (required for large enterprise procurement)~~ ✓ Sprint 5 (OIDC: Azure AD, Okta, Google, custom — JIT provisioning)
 - [ ] LDAP/AD user provisioning
 - [ ] Audit log export → SIEM (Splunk, Datadog, S3)
 - [ ] Custom GPU alert thresholds per team
