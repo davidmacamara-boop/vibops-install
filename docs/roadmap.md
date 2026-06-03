@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-05-30 · v0.18.0-sprint5_
+_Last updated: 2026-06-04 · v0.19.0-sprint6_
 
 ## Principles
 
@@ -167,8 +167,11 @@ _Last updated: 2026-05-30 · v0.18.0-sprint5_
 
 ### MCP Server (`VibOpsai/vibops-mcp`)
 - [x] 16 observation tools — clusters, deployments, jobs, GPU metrics, MTTR, cost, gateways, alerts, pipelines…
-- [x] 8 action tools — scale, deploy, helm upgrade/uninstall, kubectl, git clone, create secret, trigger pipeline
+- [x] 14 action tools — scale, deploy, helm upgrade/uninstall, kubectl, git clone, create secret, trigger pipeline, Slurm (6 tools)
 - [x] 3 config tools — set cluster rate, register/delete gateway
+- [x] 22 governance tools — anomalies, AI Act, compliance reports, audit chain, policy, agent identities, dependency graph, LLM-as-judge
+- [x] 4 FinOps tools — budget, chargeback, spend trend, waste analysis
+- [x] **59 tools total** — published on PyPI (`vibops-mcp`) + GitHub
 
 ### Security
 - [x] CVE scanning — `pip-audit` on all `requirements.txt` + Trivy filesystem scan, blocking on HIGH/CRITICAL, runs on every push and PR
@@ -222,6 +225,39 @@ _Last updated: 2026-05-30 · v0.18.0-sprint5_
 - [x] Console graph panel — nodes and edges table
 
 **v0.18.0 — 5 issues closed, 28 new tests, 22 new API endpoints, 4 new Alembic migrations**
+
+---
+
+### AgentOps Sprint 6 — Connector Catalog Extensions + Dynamic Agent Tool Loading (2026-06-04)
+
+**Vendor-specific connector tools**
+- [x] `AmdConnector` — `amd_list_devices` (ROCm device listing via `rocm-smi`), `amd_partition_device` (MIG-equivalent GPU partitioning)
+- [x] `IntelConnector` — `intel_list_devices` (Gaudi device listing via `hl-smi`)
+- [x] `TPUConnector` — `tpu_list_devices` (GCP TPU listing via `kubectl get tpu`), `tpu_install_operator` (TPU operator Helm install)
+- [x] `TrainiumConnector` — `trainium_list_devices` (neuron-ls inventory), `trainium_estimate_cost` (Trainium cost estimation vs GPU equivalent)
+- [x] `GroqConnector` — `groq_list_devices` (Groq LPU inventory via Groq Cloud API)
+- [x] All vendor tools registered in `VENDOR_TOOL_GUARDRAILS` CI allowlist with justification; catalog tests updated to superset assertions
+
+**OutscaleConnector — full TOOL_CATALOG (15 actions)**
+- [x] OKS managed Kubernetes: `outscale_list_clusters`, `outscale_get_cluster`, `outscale_create_cluster`, `outscale_delete_cluster`, `outscale_get_kubeconfig`, `outscale_upgrade_cluster`
+- [x] Node pools: `outscale_list_node_pools`, `outscale_create_node_pool`, `outscale_scale_node_pool`, `outscale_delete_node_pool`
+- [x] Flexible GPU: `outscale_list_gpu_catalog`, `outscale_list_flexible_gpus`
+- [x] Account: `outscale_list_vms`, `outscale_get_quota`, `outscale_get_consumption`
+- [x] Console connector catalog: Google TPU entry added
+
+**Dynamic agent tool loading**
+- [x] `CoreClient.get_catalog()` — fetches `/api/v1/catalog` at agent startup
+- [x] `AgentService._refresh_tools()` — merges catalog tools into agent context on boot; agent exposes ~243 tools (vs 150 hardcoded)
+- [x] Startup hook in `agent/app/main.py` — `_refresh_tools()` called via `@app.on_event("startup")`
+- [x] Dynamic dispatch fallback in `_execute_tool()` — any catalog tool not in the hardcoded set is dispatched via `CoreClient.run_job`
+
+**Bug fixes**
+- [x] Fix 500 on `GET /api/v1/catalog/{action}/history` — broken `func.cast(Job.status == JobStatus.SUCCESS, ...)` SQLAlchemy syntax simplified to a clean `func.count` query
+
+**Security**
+- [x] `PyJWT 2.12.0 → 2.13.0` — patches PYSEC-2026-175, PYSEC-2026-176, PYSEC-2026-177, PYSEC-2026-178, PYSEC-2026-179
+
+**v0.19.0 — 18 files changed, 7 new connector tools, 15 Outscale actions, dynamic tool loading, 1 security fix**
 
 ---
 
@@ -318,8 +354,8 @@ _Last updated: 2026-05-30 · v0.18.0-sprint5_
 - [ ] Multi-org licence (enterprise with multiple BUs on one instance)
 
 ### Accelerator vendors
-- [ ] Intel Habana Gaudi 3 (next-gen, different driver stack)
-- [ ] Additional cloud TPU generations as they release
+- ~~[ ] Intel Habana Gaudi 3 (next-gen, different driver stack)~~ ✓ Sprint 6 (`intel_list_devices` via `hl-smi`)
+- ~~[ ] Additional cloud TPU generations as they release~~ ✓ Sprint 6 (`tpu_list_devices` + `tpu_install_operator`)
 - [ ] Accelerator vendor SDK version matrix — tested compatibility table
 
 ### MCP Server
