@@ -619,6 +619,121 @@ curl -s "https://<host>/api/v1/audit?limit=50&action=scale_cluster" \
 Fields per entry: `job_id`, `action`, `outcome` (`allowed`|`denied`), `matched_rule`, `reason`,
 `triggered_by`, `org_id`, `created_at`.
 
+### `GET /api/v1/audit/export` _(org admin only)_
+
+Exports audit events in bulk for ingestion into a SIEM (Splunk, QRadar, ArcSight, Elastic).
+
+**Query parameters**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `format` | `json` | `json` · `cef` (ArcSight/Splunk) · `leef` (IBM QRadar) |
+| `limit` | `10000` | Max events to export (ceiling: 50 000) |
+| `since` | — | ISO 8601 datetime — export events after this timestamp |
+| `until` | — | ISO 8601 datetime — export events before this timestamp |
+| `action` | — | Filter by action name |
+
+**JSON export** (default)
+
+```bash
+curl -s "https://<host>/api/v1/audit/export?format=json&limit=5000" \
+  -H "Authorization: Bearer $TOKEN" > audit_export.json
+```
+
+Response includes a signed manifest:
+```json
+{
+  "exported_at": "2026-06-14T09:00:00Z",
+  "count": 4832,
+  "format": "json",
+  "events": [...],
+  "manifest": {
+    "count": 4832,
+    "exported_at": "2026-06-14T09:00:00Z",
+    "sha256": "a3f1..."
+  },
+  "manifest_signature": "hmac-sha256:9c2e..."
+}
+```
+
+Verify integrity with the `manifest_signature` (HMAC-SHA256 keyed with `SECRET_KEY`).
+
+**CEF export** (ArcSight / Splunk)
+
+```bash
+curl -s "https://<host>/api/v1/audit/export?format=cef&since=2026-06-01T00:00:00Z" \
+  -H "Authorization: Bearer $TOKEN" > audit.cef
+```
+
+Each line follows the ArcSight CEF standard:
+```
+CEF:0|VibOps|VibOps|1.0|deploy_model|deploy_model|5|rt=1718352000000 suser=alice@acme.com ...
+```
+
+**LEEF export** (IBM QRadar)
+
+```bash
+curl -s "https://<host>/api/v1/audit/export?format=leef" \
+  -H "Authorization: Bearer $TOKEN" > audit.leef
+```
+
+Each line follows the LEEF 2.0 format:
+```
+LEEF:2.0|VibOps|VibOps|1.0|deploy_model|	usrName=alice	sev=5	devTime=...
+```
+
+**Automation example** — nightly cron to Splunk HEC:
+
+```bash
+#!/bin/bash
+SINCE=$(date -u -d "yesterday" +%Y-%m-%dT00:00:00Z)
+UNTIL=$(date -u -d "today" +%Y-%m-%dT00:00:00Z)
+curl -s "https://$VIBOPS_HOST/api/v1/audit/export?format=cef&since=$SINCE&until=$UNTIL" \
+  -H "Authorization: Bearer $VIBOPS_TOKEN" | \
+curl -s -X POST "https://$SPLUNK_HEC_URL/services/collector/raw" \
+  -H "Authorization: Splunk $SPLUNK_HEC_TOKEN" \
+  --data-binary @-
+```
+
+---
+
+## Destructive operations — dry-run confirmation
+
+All `DELETE` endpoints in VibOps follow a **two-step confirmation pattern** to prevent accidental data loss.
+
+**Step 1 — dry-run preview** (default, no `?confirmed=true`)
+
+```bash
+curl -s -X DELETE "https://<host>/api/v1/tokens/abc123" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{
+  "action": "delete_token",
+  "token": {"id": "abc123", "name": "ci-deploy"},
+  "confirmed": false,
+  "warning": "This API token will be permanently revoked. Add ?confirmed=true to execute."
+}
+```
+
+**Step 2 — execute** (add `?confirmed=true`)
+
+```bash
+curl -s -X DELETE "https://<host>/api/v1/tokens/abc123?confirmed=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{"deleted": true, "id": "abc123"}
+```
+
+This pattern applies to: `DELETE /tokens/{id}`, `DELETE /webhooks/subscriptions/{id}`,
+`DELETE /notifications/channels/{id}`, `DELETE /orgs/{id}/teams/{id}`,
+`DELETE /orgs/{id}/invites/{id}`, `DELETE /orgs/{id}/teams/{id}/members/{user_id}`,
+`DELETE /alert-rules/{id}`, `DELETE /providers/{id}`, `DELETE /eval/rubrics/{id}`,
+`DELETE /memories/{key}`, `DELETE /policy`.
+
 ---
 
 ## Licence

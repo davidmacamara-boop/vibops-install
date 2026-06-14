@@ -2738,6 +2738,80 @@ Each reseller org can have its own `white_label_domain`. A single VibOps instanc
 
 ---
 
+---
+
+## Security hardening — audit cycle
+
+This section covers security improvements shipped after the internal Opus audit (June 2026). All changes are backward-compatible.
+
+### Destructive operations — dry-run confirmation
+
+Every `DELETE` in VibOps now follows a **two-step pattern**: the first call returns a preview, the second (with `?confirmed=true`) executes.
+
+```bash
+# Step 1 — preview (safe, no side effect)
+DELETE /api/v1/webhooks/subscriptions/{id}
+→ {"action":"delete_subscription","confirmed":false,"warning":"..."}
+
+# Step 2 — execute
+DELETE /api/v1/webhooks/subscriptions/{id}?confirmed=true
+→ {"deleted":true,"id":"..."}
+```
+
+This applies to tokens, webhook subscriptions, notification channels, teams, invites, team members, alert rules, providers, eval rubrics, memories, and the org policy.
+
+The agent handles this automatically — when Claude needs to delete a resource, it calls the preview first and includes the details in its response before executing.
+
+### SIEM audit export
+
+Compliance teams can export the audit trail to any SIEM. Navigate to **Admin → Audit** and click **Export**, or use the API directly:
+
+```bash
+# JSON (default)
+GET /api/v1/audit/export?format=json&since=2026-01-01T00:00:00Z
+
+# CEF for Splunk / ArcSight
+GET /api/v1/audit/export?format=cef
+
+# LEEF for IBM QRadar
+GET /api/v1/audit/export?format=leef
+```
+
+Each export includes a signed manifest (`HMAC-SHA256`) for chain-of-custody verification. Maximum 50 000 events per call — paginate with `since`/`until` for larger ranges.
+
+Available to **org admins** only.
+
+### Budget hard cap — pre-flight enforcement
+
+The budget hard cap now **blocks job creation** before the job starts, not after it completes. When the projected spend would exceed your org's monthly hard cap, VibOps returns `HTTP 429` with `"hard_cap": true`.
+
+Configure your cap in **Admin → FinOps → Budgets**:
+
+| Threshold | Effect |
+|-----------|--------|
+| `soft_cap_pct` | Alert sent to notification channels |
+| `hard_cap_pct` | New job creation blocked until next billing cycle |
+
+### OIDC / SSO — hardened flow
+
+The OIDC callback is now fully secured:
+
+- **State parameter**: HMAC-signed with 10-minute TTL — prevents CSRF attacks
+- **id_token verification**: validated against the provider's JWKS endpoint (PyJWT) — tokens cannot be forged
+- **JIT provisioning**: creates a real `User` row in the database — API tokens and audit records work from the first login
+
+No configuration change required. Existing SSO configurations remain valid.
+
+### Production secret validation
+
+VibOps refuses to start in `production` mode with default secrets (`change-me-in-production`). Set `SECRET_KEY` and `JWT_SECRET_KEY` to strong random values:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+---
+
 ### Support
 
 - Documentation: this file and `docs/installation.md`
