@@ -413,6 +413,112 @@ Response:
 
 ---
 
+## Cloud Pricing
+
+Fetches real-time GPU instance prices from cloud provider APIs and syncs them into cluster cost rates.
+
+### `GET /api/v1/cloud-pricing/lookup`
+
+Preview the hourly price for any (provider, instance type, region, pricing tier) without saving anything.
+
+**Query parameters**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `provider` | ✓ | `aws` · `azure` · `gcp` |
+| `instance_type` | ✓ | e.g. `p5.48xlarge`, `Standard_ND96isr_H100_v5`, `a3-highgpu-8g` |
+| `region` | ✓ | e.g. `us-east-1`, `eastus`, `us-central1` |
+| `pricing_tier` | — | `on_demand` (default) · `spot` · `reserved_1y` · `reserved_3y` |
+
+```bash
+curl -s "https://<host>/api/v1/cloud-pricing/lookup?provider=aws&instance_type=p5.48xlarge&region=us-east-1&pricing_tier=on_demand" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Response:
+```json
+{
+  "provider": "aws",
+  "instance_type": "p5.48xlarge",
+  "region": "us-east-1",
+  "pricing_tier": "on_demand",
+  "instance_hourly_rate_usd": 98.32,
+  "accelerators_per_instance": 8,
+  "rate_per_gpu_hour_usd": 12.29,
+  "source": "api",
+  "currency": "USD"
+}
+```
+
+`source`: `"api"` (live from provider) or `"static"` (GCP cached table).
+
+### `POST /api/v1/clusters/{cluster_name}/rate/sync` _(org admin)_
+
+Fetches the live price and saves it as the cluster GPU rate in one call.
+
+```bash
+curl -s -X POST "https://<host>/api/v1/clusters/h100-prod/rate/sync" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "aws",
+    "instance_type": "p5.48xlarge",
+    "region": "us-east-1",
+    "pricing_tier": "on_demand",
+    "markup_pct": 20
+  }' | jq .
+```
+
+Body fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `provider` | ✓ | `aws` · `azure` · `gcp` |
+| `instance_type` | ✓ | Instance type (must be in the supported catalogue) |
+| `region` | ✓ | Cloud region |
+| `pricing_tier` | — | Defaults to `on_demand` |
+| `markup_pct` | — | Chargeback markup % (0 = pass-through). Keeps existing value if omitted. |
+
+Response:
+```json
+{
+  "cluster_name": "h100-prod",
+  "provider": "aws",
+  "instance_type": "p5.48xlarge",
+  "region": "us-east-1",
+  "pricing_tier": "on_demand",
+  "instance_hourly_rate_usd": 98.32,
+  "accelerators_per_instance": 8,
+  "rate_per_gpu_hour_usd": 12.29,
+  "markup_pct": 20.0,
+  "source": "api",
+  "synced_at": "2026-06-14T03:00:00Z"
+}
+```
+
+After sync, `GET /clusters/{name}/rate` returns the updated `rate_per_gpu_hour`.
+
+**Daily auto-refresh** — Celery Beat re-syncs all clusters that have `formula_type="cloud"` at 03:00 UTC automatically. No manual action required once configured.
+
+**Supported instance types (selection)**
+
+| Provider | Instance | GPUs | GPU model |
+|----------|----------|------|-----------|
+| AWS | `p5.48xlarge` | 8 | H100 80GB |
+| AWS | `p4d.24xlarge` | 8 | A100 40GB |
+| AWS | `p4de.24xlarge` | 8 | A100 80GB |
+| AWS | `g5.48xlarge` | 8 | A10G |
+| Azure | `Standard_ND96isr_H100_v5` | 8 | H100 80GB |
+| Azure | `Standard_ND96asr_v4` | 8 | A100 40GB |
+| Azure | `Standard_NC96ads_A100_v4` | 4 | A100 80GB |
+| GCP | `a3-highgpu-8g` | 8 | H100 80GB |
+| GCP | `a2-highgpu-8g` | 8 | A100 40GB |
+| GCP | `a2-ultragpu-8g` | 8 | A100 80GB |
+
+Full list: `GET /cloud-pricing/lookup` returns `422` with all known types on unknown input.
+
+---
+
 ## Webhooks
 
 Webhook endpoints receive external events and translate them into VibOps jobs.

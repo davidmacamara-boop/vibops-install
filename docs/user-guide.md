@@ -2152,6 +2152,57 @@ Set the monthly GPU budget to 5000 dollars with an alert at 80% and a hard cap a
 
 ---
 
+### Cloud Pricing sub-tab
+
+**What is it for?** Automatically fetches the real-time GPU instance price from your cloud provider (AWS, Azure, GCP) and stores it as the cluster rate. Eliminates manual rate entry and keeps cost estimates accurate as cloud prices change.
+
+**Supported providers and tiers:**
+
+| Provider | On-demand | Spot | Reserved 1Y | Reserved 3Y |
+|----------|-----------|------|-------------|-------------|
+| AWS | ✓ (Pricing API) | ✓ (Spot API) | ✓ | ✓ |
+| Azure | ✓ (Retail Prices API) | ✓ | ✓ | ✓ |
+| GCP | ✓ (static table) | ✓ | ✓ | ✓ |
+
+**Syncing a cluster rate from the agent:**
+
+```
+Sync the GPU rate for cluster h100-prod from AWS — p5.48xlarge, us-east-1, on-demand
+```
+
+```
+What is the current Azure spot price for Standard_ND96isr_H100_v5 in eastus?
+```
+
+**Syncing via API:**
+
+```bash
+# Preview without saving
+GET /api/v1/cloud-pricing/lookup?provider=gcp&instance_type=a3-highgpu-8g&region=us-central1
+→ {"rate_per_gpu_hour_usd": 12.29, "source": "static", ...}
+
+# Fetch + save as cluster rate
+POST /api/v1/clusters/h100-prod/rate/sync
+{"provider": "aws", "instance_type": "p5.48xlarge", "region": "us-east-1", "markup_pct": 20}
+```
+
+**Daily auto-refresh:** once a cluster is synced, VibOps re-fetches the price every night at 03:00 UTC automatically. The `rate_per_gpu_hour` in cost estimates and chargeback reports always reflects the current cloud price.
+
+**Pricing tier selection:**
+
+| Tier | When to use |
+|------|-------------|
+| `on_demand` | Default — pay-as-you-go fleet |
+| `spot` | Cost tracking for interruptible GPU nodes |
+| `reserved_1y` | Cost model for committed instance purchases |
+| `reserved_3y` | Long-term commitment cost model |
+
+**AWS credentials:** the sync endpoint calls the AWS Pricing API via `boto3`. The gateway must have AWS credentials configured (IAM role, instance profile, or `AWS_ACCESS_KEY_ID` env var).
+
+**GCP note:** prices come from a curated static table (updated with each VibOps release). Azure prices are live from the public Microsoft Retail Prices API — no credentials required.
+
+---
+
 ### Alerts sub-tab
 
 The history of all budget overruns: when the soft cap or hard cap was reached, what the spend was at that moment, and what the cap was.
