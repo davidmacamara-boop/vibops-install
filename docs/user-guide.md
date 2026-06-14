@@ -2009,6 +2009,124 @@ A gateway disconnected for more than 5 minutes switches to `degraded` state and 
 
 ---
 
+## Pipeline templates — deploy from the console
+
+VibOps can manage its own infrastructure. Once a VibOps instance is running, all subsequent deployments and cluster connections can be triggered directly from the operator chat — no local `kubectl` or `helm` required.
+
+### Available templates
+
+```
+GET /api/v1/pipelines/templates
+```
+
+Returns the full catalogue with parameters, step descriptions, and step count.
+
+| Template | Steps | Purpose |
+|----------|-------|---------|
+| `deploy_vibops` | 3 | Deploy or upgrade a VibOps instance via Helm |
+| `connect_gpu_cluster` | 2 | Deploy the VibOps Connect gateway on a remote GPU cluster |
+
+---
+
+### Template: deploy_vibops
+
+Clones the VibOps repo, runs `helm upgrade --atomic`, then waits for rollout.
+
+**Chat prompt:**
+```
+Deploy VibOps v0.21.0 on context prod-k8s
+```
+
+**Parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `image_tag` | `v0.20.0` | Image tag to deploy |
+| `context` | `""` | kubectl context (empty = current context) |
+| `release` | `vibops` | Helm release name |
+| `namespace` | `vibops` | Target namespace |
+| `chart_ref` | `./helm/vibops` | Helm chart path or OCI ref |
+| `jwt_secret_key` | `""` | JWT secret (set for initial deploy) |
+| `llm_api_key` | `""` | Anthropic API key (set for initial deploy) |
+| `values_file` | `""` | Path to extra values file |
+
+**API:**
+```bash
+curl -X POST https://vibops.yourcompany.com/api/v1/pipelines/from-template/deploy_vibops \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image_tag": "v0.21.0",
+    "context": "prod-k8s",
+    "namespace": "vibops"
+  }'
+```
+
+**Steps executed:**
+1. `git_clone` — clones `https://github.com/davidmacamara-boop/vibops.git` to `/tmp/vibops-deploy`
+2. `helm_upgrade` — deploys with `--atomic --wait --timeout 10m`
+3. `run_kubectl` — `rollout status deployment -n vibops --timeout=5m` (non-blocking: `on_failure: continue`)
+
+---
+
+### Template: connect_gpu_cluster
+
+Deploys the `vibops-connect` gateway chart on a remote GPU cluster, then verifies the pod is running.
+
+**Chat prompt:**
+```
+Connect the GPU cluster gpu-prod to this VibOps instance using API key vbops_xyz
+```
+
+**Parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `gateway_name` | `gpu-prod` | Gateway display name in Admin → Gateways |
+| `vibops_url` | `https://vibops.yourcompany.com` | VibOps public URL |
+| `api_key` | `""` | VibOps API key (generate in Admin → API Tokens) |
+| `namespace` | `vibops-connect` | Namespace on the GPU cluster |
+| `context` | `""` | kubectl context of the GPU cluster |
+
+**API:**
+```bash
+curl -X POST https://vibops.yourcompany.com/api/v1/pipelines/from-template/connect_gpu_cluster \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gateway_name": "gpu-prod",
+    "vibops_url": "https://vibops.yourcompany.com",
+    "api_key": "vbops_xyz",
+    "context": "gpu-cluster-ctx"
+  }'
+```
+
+**Steps executed:**
+1. `helm_upgrade` — deploys `oci://ghcr.io/vibops/charts/vibops-connect` with `--wait --timeout 5m`
+2. `run_kubectl` — `get pods -n vibops-connect -l app=vibops-connect` to verify the pod is running
+
+---
+
+### Monitoring pipeline execution
+
+```bash
+# Get pipeline status
+GET /api/v1/pipelines/{pipeline_id}
+
+# List recent pipelines
+GET /api/v1/pipelines?limit=20
+```
+
+Each pipeline response includes per-step status (`pending` / `running` / `success` / `failed`), the `job_id` of the spawned job, and any error message.
+
+### Policy and permissions
+
+- Template instantiation requires a `write` role.
+- All step actions are validated against the PolicyEngine at creation time — unknown or forbidden actions return `403` with the offending steps listed.
+- All executions are recorded in the audit log (`triggered_by: template:deploy_vibops:admin`).
+
+---
+
 ## 19. FinOps tab
 
 **What is it for?** The FinOps tab gives you a centralized view of what your GPUs cost, where the money goes, and how to control it. Five sub-tabs: **Waste**, **Budget**, **Chargeback**, **Alerts** (history of overruns), **Workloads** (live per-workload GPU utilisation).
