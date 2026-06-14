@@ -134,7 +134,31 @@ Vérifier dans Admin → Licence que la clé est reconnue.
 
 ## Étape 6 — Connecter le premier cluster GPU
 
-### Option A — Cluster distant (production)
+### Option A — Depuis la console VibOps (recommandé)
+
+Une fois VibOps déployé, tout le reste se pilote **depuis la console elle-même** via les pipeline templates.
+
+Dans le chat :
+```
+Connect the GPU cluster gpu-prod to this VibOps instance using API key vbops_xyz
+```
+
+VibOps déclenche automatiquement le pipeline `connect_gpu_cluster` :
+- Step 1 : `helm_upgrade` → déploie le gateway `vibops-connect` sur le cluster cible
+- Step 2 : `run_kubectl` → vérifie que le pod est `Running`
+
+Pour voir les templates disponibles :
+```
+GET /api/v1/pipelines/templates
+```
+
+Pour déployer une mise à jour de VibOps lui-même depuis la console :
+```
+Deploy VibOps v0.21.0 on context prod-k8s
+```
+→ pipeline `deploy_vibops` : `git_clone` → `helm_upgrade` → `rollout status`
+
+### Option B — Cluster distant (CLI)
 
 Sur le **cluster GPU client**, déployer le gateway VibOps Connect :
 
@@ -146,7 +170,7 @@ helm upgrade --install vibops-connect ./charts/vibops-connect \
   -n vibops-connect --create-namespace
 ```
 
-### Option B — Cluster local (même cluster que VibOps)
+### Option C — Cluster local (même cluster que VibOps)
 
 ```bash
 # Créer une API key dans Admin → API Tokens
