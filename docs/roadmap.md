@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-06-04 · v0.19.0-sprint6_
+_Last updated: 2026-06-14 · v0.20.0-sprint7_
 
 ## Principles
 
@@ -261,6 +261,56 @@ _Last updated: 2026-06-04 · v0.19.0-sprint6_
 
 ---
 
+### AgentOps Sprint 7 — Security hardening, FinOps attestation, Ascend NPU, White-label routing (2026-06-14)
+
+**Issue #16 — Confirmation gates on all destructive DELETE routes**
+- [x] `DELETE /gateways/{id}` and `DELETE /gateways/{id}/clusters/{name}` — dry-run preview (jobs_cancelled, clusters_removed) before confirmed=true deletion
+- [x] `DELETE /secrets/{name}` — pre-flight existence check + confirmation gate
+- [x] `DELETE /agent-identities/{id}` — dry-run shows name + revocation status
+- [x] `DELETE /triggers/{rule_id}` — dry-run shows rule name + enabled status
+- [x] All gates return 200 with impact preview without `?confirmed=true`
+
+**Issue #17 — Auth standardization**
+- [x] Router-level `dependencies=[Depends(get_current_user)]` on all protected routers (30 files audited)
+- [x] Mixed-auth routers (gateways.py — JWT + gateway Bearer) explicitly excluded with comment
+- [x] `briefing.py` — `require_write` at router level
+
+**Issue #13 — Approval gate user context**
+- [x] `ApprovalGate` model: `requested_by_user_id`, `requested_by_username`, `estimated_cost` columns
+- [x] Migration inlined into `a2b3c4d5e6f7` (CREATE TABLE) to avoid ALTER TABLE ordering issues
+- [x] `POST /jobs` — passes user context + estimated_cost from dry-run preview to gate creation
+- [x] `GET /approvals` and detail endpoint — return user context fields
+- [x] Console Approvals panel — shows requesting user + estimated cost badge
+
+**Issue #12 — Signed billing export (BYOC enterprise)**
+- [x] `GET /api/v1/finops/billing/export?month=YYYY-MM` — cryptographic attestation endpoint
+- [x] HMAC-SHA256 over canonical (sorted-keys) JSON payload, keyed with `SECRET_KEY`
+- [x] `signed_at` embedded inside the payload — timestamp tampering also breaks the signature
+- [x] 12 contract tests: shape, signature validity, tamper detection (cost, org_id), validation, auth
+- [x] Verification recipe in endpoint docstring (4 lines of Python, no VibOps SDK needed)
+
+**Huawei Ascend NPU connector — agent integration**
+- [x] `AscendConnector` — `ascend_list_devices`, `ascend_get_metrics`, `ascend_partition_device` (3 Ascend-specific tools + full `accelerator_*` abstract methods)
+- [x] Hardware: Ascend 910B (64GB HBM2e), 910A (32GB), 310P (16GB inference); Kubernetes resource `huawei.com/Ascend910`
+- [x] npu-smi metrics: Aicore utilization, HBM memory, temperature, power; simulated fallback for demo clusters
+- [x] vNPU partitioning: full/half/quarter modes; semantics explicitly documented as NOT equivalent to NVIDIA MIG or AMD CPX
+- [x] 22 tests (tool catalog, registry, npu-smi parser, list/metrics/partition/diagnose)
+- [x] Agent `_RUN_JOB_TOOLS`: `ascend_list_devices`, `ascend_get_metrics`; `_CREATE_JOB_TOOLS`: `ascend_partition_device`
+- [x] System prompt: Ascend vendor-specific tool section with vNPU semantics and target market context
+
+**White-label custom domain routing**
+- [x] `Organization` model: `white_label_domain` (unique, indexed, max 253 chars) + `white_label_contact_email`
+- [x] Alembic migration `b1c2d3e4f5a6`
+- [x] `GET /api/v1/branding` — public endpoint resolves CSP brand from `Host` header; falls back to VibOps defaults
+- [x] `PUT /resellers/me` — accepts `white_label_domain` + `white_label_contact_email`; 409 on domain clash
+- [x] Console: fetches `/branding` on init; applies name to `document.title` and header logo for white-label orgs
+- [x] `t()` i18n function substitutes `contact_email` in all licence hint strings when `is_white_label: true`
+- [x] Endpoint auth CI guard: `/branding` added to public allowlist with justification comment
+
+**v0.20.0 — 4 issues closed, 12 new tests, 1 new public endpoint, 2 new model columns**
+
+---
+
 ## P1 — Backlog (prioritized)
 
 ### FinOps maturity
@@ -268,7 +318,7 @@ _Last updated: 2026-06-04 · v0.19.0-sprint6_
 - ~~[ ] Chargeback generation — automated monthly Celery Beat task (currently admin-triggered)~~ ✓ Sprint 15
 - [ ] Cloud pricing API integration — live AWS/GCP/Azure GPU rates (currently manual ClusterRate)
 - [ ] Currency conversion — multi-currency support (currently USD only)
-- [ ] White-label routing — custom domains per CSP via `white_label_slug`
+- [x] White-label routing — custom domains per CSP via `white_label_domain` — `GET /branding` resolves CSP brand from Host header ✓ Sprint 7
 - [ ] FinOps UI — consent management + dataset export controls in console (ADR 0018 — Decision 5)
 - ~~[ ] Budget enforcement on pre-Sprint 9 jobs — sum Job records instead of ChargebackReport~~ ✓ Sprint 14
 

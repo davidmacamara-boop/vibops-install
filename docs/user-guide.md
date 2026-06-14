@@ -2591,6 +2591,153 @@ The console **Admin → Agent Graph** panel renders the graph as a table of edge
 
 ---
 
+### Signed billing export — verifiable billing for BYOC enterprise (Issue #12)
+
+Enterprise accounts running VibOps in a BYOC (Bring Your Own Cloud) context can export a cryptographically signed billing record for any closed month. The signature makes the document tamper-evident: any modification to any field — including rounding — invalidates it.
+
+#### Exporting a signed bill
+
+```
+GET /api/v1/finops/billing/export?month=2026-05
+```
+
+**Prerequisites:** a chargeback report must exist for the period. Generate one first if needed:
+
+```
+POST /api/v1/finops/chargeback/2026/5/generate
+```
+
+#### Response structure
+
+```json
+{
+  "report": {
+    "org_id": "...",
+    "period_year": 2026,
+    "period_month": 5,
+    "gpu_hours_total": 320.5,
+    "customer_cost_usd": 801.25,
+    "currency": "USD",
+    "signed_at": "2026-06-01T00:00:00+00:00",
+    ...
+  },
+  "export_meta": {
+    "signed_at": "2026-06-01T00:00:00+00:00",
+    "algorithm": "HMAC-SHA256",
+    "signature": "a3f2b1..."
+  }
+}
+```
+
+The `signed_at` timestamp is embedded inside `report` so it is part of the signed data — you cannot change the timestamp without invalidating the signature.
+
+#### Verifying the signature (no VibOps SDK required)
+
+```python
+import hmac, hashlib, json
+
+def verify_billing_export(export: dict, secret_key: str) -> bool:
+    payload = export["report"]
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    expected = hmac.new(
+        secret_key.encode(),
+        canonical.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, export["export_meta"]["signature"])
+```
+
+The `secret_key` is your instance's `SECRET_KEY` environment variable. For multi-tenant setups, VibOps can provide a per-org sub-key on request.
+
+---
+
+### Huawei Ascend NPU support
+
+VibOps supports Huawei Ascend NPU clusters (Ascend 910B, 910A, 310P) managed via the Ascend Device Plugin for Kubernetes. This enables sovereign European defense deployments and Asia-Pacific deployments seeking NVIDIA-independence.
+
+#### Prerequisites
+
+- Ascend Device Plugin installed in the cluster (`ascend-device-plugin` namespace)
+- `npu-smi` available on NPU nodes (bundled with Ascend driver, CANN 7.x+)
+- Kubernetes resource `huawei.com/Ascend910` visible in node allocatable
+
+#### Ascend-specific tools
+
+| Tool | Description |
+|------|-------------|
+| `ascend_list_devices` | List Ascend NPU nodes from Kubernetes labels (`huawei.com/Ascend910`, `310P`). Returns model, HBM capacity, CANN version, vNPU support. |
+| `ascend_get_metrics` | Real-time metrics via npu-smi: Aicore utilization, HBM memory, temperature, power draw. Simulated fallback for demo clusters without npu-smi. |
+| `ascend_partition_device` | Enable/disable vNPU partitioning. Modes: `full` (1 vNPU), `half` (2), `quarter` (4, 910B only). Requires confirmation. |
+
+All generic `accelerator_*` tools also work on Ascend clusters (`accelerator_diagnose`, `accelerator_get_metrics`, `accelerator_workload_match`, etc.).
+
+#### vNPU partitioning — important semantics
+
+Ascend vNPU partitioning **is not equivalent to NVIDIA MIG or AMD CPX**. Isolation is enforced at the VNPU scheduler level, not hardware-enforced memory partitioning. Do not cross-map Ascend vNPU slice counts to NVIDIA MIG profile names — the isolation model and scheduling behaviour are distinct.
+
+```
+# Enable quarter mode (4 vNPU slices per 910B) on all Ascend nodes
+ascend_partition_device  action=enable  profile=quarter
+
+# Disable partitioning (reset to full physical NPU)
+ascend_partition_device  action=disable
+```
+
+#### Example conversation
+
+```
+You: List the Ascend NPUs available in the cluster
+VibOps: [calls ascend_list_devices]
+         ascend-node-uk-01 : Ascend910B (64GB HBM) ×6 CANN=7.0.RC1
+         ascend-node-uk-02 : Ascend910B (64GB HBM) ×6 CANN=7.0.RC1
+
+You: What's the current HBM utilization?
+VibOps: [calls ascend_get_metrics]
+         NPU 0 [Ascend910B]  Aicore: 58%  HBM: 12GB/64GB (18%)  Temp: 52°C  Power: 310W
+         NPU 1 [Ascend910B]  Aicore: 61%  HBM: 16GB/64GB (25%)  Temp: 54°C  Power: 325W
+```
+
+---
+
+### White-label console for CSP resellers
+
+VibOps supports custom domain deployments for CSP resellers. When clients access the console via a CSP-specific domain (e.g. `gpu.acme-cloud.com`), the console automatically displays the CSP brand name and contact information instead of "VibOps".
+
+#### Setting up a white-label domain (reseller admin)
+
+```
+PUT /api/v1/resellers/me
+{
+  "white_label_domain": "gpu.acme-cloud.com",
+  "white_label_name": "Acme GPU Console",
+  "white_label_contact_email": "support@acme.com"
+}
+```
+
+Then point your DNS `A` or `CNAME` record for `gpu.acme-cloud.com` to your VibOps instance IP. TLS is handled by your reverse proxy (Caddy, nginx, Cloudflare).
+
+#### What changes for end users
+
+- Browser tab shows `Acme GPU Console` instead of `VibOps Console`
+- Console header logo shows `Acme GPU Console`
+- Licence hint strings show `support@acme.com` instead of `david@vibops.ai`
+
+#### How it works
+
+The console calls `GET /api/v1/branding` (public, no JWT) on startup. VibOps reads the `Host` header, looks up the matching `white_label_domain`, and returns the brand configuration. If no match is found, VibOps defaults are returned — the same VibOps instance serves multiple CSP brands via a single public endpoint.
+
+#### Multiple CSP tenants on one instance
+
+Each reseller org can have its own `white_label_domain`. A single VibOps instance handles all of them:
+
+| Host header | Brand returned |
+|-------------|----------------|
+| `gpu.acme-cloud.com` | Acme GPU Console |
+| `ai.beta-cloud.io` | Beta AI Platform |
+| `vibops.ai` | VibOps (default) |
+
+---
+
 ### Support
 
 - Documentation: this file and `docs/installation.md`
