@@ -171,7 +171,7 @@ _Last updated: 2026-06-14 · v0.20.0-sprint7_
 - [x] 3 config tools — set cluster rate, register/delete gateway
 - [x] 22 governance tools — anomalies, AI Act, compliance reports, audit chain, policy, agent identities, dependency graph, LLM-as-judge
 - [x] 4 FinOps tools — budget, chargeback, spend trend, waste analysis
-- [x] **59 tools total** — published on PyPI (`vibops-mcp`) + GitHub
+- [x] **68 tools total** — published on PyPI (`vibops-mcp`) + GitHub
 
 ### Security
 - [x] CVE scanning — `pip-audit` on all `requirements.txt` + Trivy filesystem scan, blocking on HIGH/CRITICAL, runs on every push and PR
