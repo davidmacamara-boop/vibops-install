@@ -2909,6 +2909,220 @@ Each reseller org can have its own `white_label_domain`. A single VibOps instanc
 
 ---
 
+---
+
+## Sprint 6 — LDAP Auth, SIEM Push, Registry Connector
+
+### LDAP / Active Directory authentication
+
+Org admins can configure LDAP so enterprise users log in with their Active Directory or OpenLDAP credentials — no external IdP required.
+
+#### Configuring LDAP (Admin → Security)
+
+Navigate to **Admin → 🔐 Security** and fill in the LDAP form, or via API:
+
+```
+PUT /api/v1/ldap/config
+{
+  "ldap_server_url":    "ldaps://ldap.acme.com:636",
+  "ldap_bind_dn":       "cn=vibops-svc,ou=svc,dc=acme,dc=com",
+  "ldap_bind_password": "<service-account-password>",
+  "ldap_search_base":   "ou=users,dc=acme,dc=com",
+  "ldap_search_filter": "(uid={username})",
+  "ldap_jit_provisioning": true,
+  "ldap_default_role":  "member"
+}
+```
+
+The bind password is stored encrypted (Fernet / `VAULT_KEY`). The API never returns the raw value — only `ldap_bind_password_set: true`.
+
+#### Enabling LDAP
+
+Set all four required fields (`ldap_server_url`, `ldap_bind_dn`, `ldap_bind_password`, `ldap_search_base`) before enabling:
+
+```
+PUT /api/v1/ldap/config
+{ "ldap_enabled": true }
+```
+
+Enabling without the required fields returns HTTP 422.
+
+#### Search filter
+
+`{username}` is replaced with the login input at authentication time.
+
+| Directory | Recommended filter |
+|-----------|-------------------|
+| OpenLDAP | `(uid={username})` |
+| Active Directory | `(sAMAccountName={username})` |
+| Azure AD on-premise | `(userPrincipalName={username}@acme.com)` |
+
+#### Auth flow
+
+1. User clicks **🏢 Login with LDAP / Active Directory** on the login page
+2. Enters org slug, username, and password
+3. VibOps binds to the LDAP server with the service account (connectivity check)
+4. Searches for the user entry using the configured filter
+5. Re-binds as the user's DN with the provided password (credential verification)
+6. JIT-provisions the user if needed (same mechanism as OIDC)
+7. Issues a VibOps JWT — user lands in the console
+
+#### JIT provisioning
+
+With `ldap_jit_provisioning: true` (default), users are created automatically on first LDAP login. Set to `false` to require pre-created user accounts.
+
+JIT-provisioned LDAP users cannot log in via password — their account is LDAP-only (`password_hash = "sso:<random>"`).
+
+#### TLS
+
+- `ldaps://` — full TLS from connection start (port 636, recommended)
+- `ldap://` — STARTTLS negotiated automatically before the bind (port 389)
+
+#### Disabling LDAP
+
+```
+DELETE /api/v1/ldap/config
+```
+
+Clears all LDAP configuration. Existing JIT-provisioned users are unaffected.
+
+---
+
+### SIEM push export
+
+VibOps supports both **pull** (existing) and **push** (new) delivery of audit logs to your SIEM.
+
+#### Pull export (existing)
+
+Available to org admins via `GET /api/v1/audit/export`:
+
+```bash
+# JSON with HMAC-signed manifest
+GET /api/v1/audit/export?format=json&since=2026-01-01T00:00:00Z
+
+# CEF for Splunk / ArcSight
+GET /api/v1/audit/export?format=cef
+
+# LEEF for IBM QRadar
+GET /api/v1/audit/export?format=leef
+```
+
+#### Push export — Splunk HEC
+
+Configure your Splunk HEC destination once:
+
+```
+PUT /api/v1/audit/siem/config
+{
+  "siem_provider": "splunk",
+  "siem_endpoint": "https://splunk.acme.com:8088",
+  "siem_token":    "<HEC-token>"
+}
+```
+
+Then push on demand or on a schedule:
+
+```
+POST /api/v1/audit/siem/push?since=2026-06-01T00:00:00Z&until=2026-06-15T23:59:59Z
+→ { "pushed": 4821, "provider": "splunk" }
+```
+
+Events land in Splunk with `sourcetype=vibops:audit`, `index=main`.
+
+#### Push export — Datadog
+
+```
+PUT /api/v1/audit/siem/config
+{
+  "siem_provider": "datadog",
+  "siem_endpoint": "datadoghq.com",
+  "siem_token":    "<DD-API-KEY>"
+}
+```
+
+```
+POST /api/v1/audit/siem/push
+→ { "pushed": 4821, "provider": "datadog" }
+```
+
+Events arrive with `ddsource=vibops`, `service=vibops-audit`, tagged `org_id:<id>,action:<action>`.
+
+#### Config endpoint
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/audit/siem/config` | Read current SIEM destination |
+| `PUT` | `/api/v1/audit/siem/config` | Set provider, endpoint, token |
+| `POST` | `/api/v1/audit/siem/push` | Push a batch (query params: `since`, `until`, `action`, `limit`) |
+
+The SIEM token is stored encrypted (Fernet). Org admin required.
+
+---
+
+### Container registry connector
+
+The agent can now inspect and manage images in your container registry. Push and pull are handled by the existing `DockerBuildConnector` — this connector handles **management operations**: listing, checking, and deleting.
+
+#### Supported registries
+
+| Registry | `registry_type` | Auth |
+|----------|----------------|------|
+| Harbor v2 | `harbor` | `username` + `password` in payload |
+| AWS ECR | `ecr` | `aws_access_key_id` / `aws_secret_access_key` in payload, or env vars |
+| Google Artifact Registry | `gar` | `service_account_json` in payload, or ADC (`GOOGLE_APPLICATION_CREDENTIALS`) |
+
+#### Actions
+
+| Action | Description | Role |
+|--------|-------------|------|
+| `registry_list_repos` | List all repositories in a registry | viewer |
+| `registry_list_tags` | List all tags for an image | viewer |
+| `registry_check_image` | Check whether an image:tag exists | viewer |
+| `registry_delete_tag` | Delete an image tag | operator |
+
+#### Example — agent conversation
+
+```
+You: List all tags for ghcr.io/acme/api-service in our Harbor registry
+
+Agent: I'll check Harbor for you.
+  [registry_list_tags {
+    "registry_type": "harbor",
+    "registry_url": "https://registry.acme.com",
+    "image": "acme/api-service",
+    "username": "...", "password": "..."
+  }]
+
+  Found 12 tags for acme/api-service:
+  v1.4.2, v1.4.1, v1.4.0, v1.3.9, v1.3.8, latest, …
+
+You: Delete the untagged images older than v1.3.9
+
+Agent: I'll delete v1.3.0 through v1.3.8 (8 tags). This is destructive.
+  Confirm? [yes/no]
+```
+
+#### ECR example
+
+```
+You: Check if image api-service:v2.1.0 exists in ECR us-east-1
+
+Agent:
+  [registry_check_image {
+    "registry_type": "ecr",
+    "image": "api-service:v2.1.0",
+    "region": "us-east-1"
+  }]
+
+  Image api-service:v2.1.0 exists in ECR. ✓
+```
+
+#### Security note
+
+Registry credentials are passed per-job in the payload. Store them in the VibOps Secrets vault and reference them via `{{ secrets.HARBOR_PASSWORD }}` in your agent instructions to avoid exposing them in conversation history.
+
+---
+
 ## Security hardening — audit cycle
 
 This section covers security improvements shipped after the internal Opus audit (June 2026). All changes are backward-compatible.

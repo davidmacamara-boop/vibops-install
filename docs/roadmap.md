@@ -355,7 +355,7 @@ _Last updated: 2026-06-14 · v0.20.0-sprint7_
 - [x] Git tab inline repo-link form — link any app to its repo without leaving the main view
 - [x] CI connector — `ci_trigger`, `ci_status`, `ci_wait`, `registry_list_tags`; GitHub Actions dispatch + GitLab pipeline trigger; reuses GIT_TOKEN
 - [x] Admin → CI panel — provider status card + pipeline runs table (App / Workflow / Branch / Status / Duration / Triggered / Link)
-- [ ] Registry connector — list images, inspect tags, detect untagged `latest` across a private registry
+- ~~[ ] Registry connector — list images, inspect tags, detect untagged `latest` across a private registry~~ ✓ Sprint 6 (`ContainerRegistryConnector`: `registry_list_repos`, `registry_list_tags`, `registry_check_image`, `registry_delete_tag` — Harbor/ECR/GAR)
 - [ ] Kaniko support — in-cluster builds without Docker daemon (required for locked-down Kubernetes environments)
 
 ### Local cluster image loading (Sprint 16 patch)
@@ -398,8 +398,8 @@ _Last updated: 2026-06-14 · v0.20.0-sprint7_
 
 ### Enterprise
 - ~~[ ] SSO / SAML integration (required for large enterprise procurement)~~ ✓ Sprint 5 (OIDC: Azure AD, Okta, Google, custom — JIT provisioning)
-- [ ] LDAP/AD user provisioning
-- [ ] Audit log export → SIEM (Splunk, Datadog, S3)
+- ~~[ ] LDAP/AD user provisioning~~ ✓ Sprint 6 (LDAP/AD auth with JIT provisioning, TLS/STARTTLS, UI in Admin → Security tab)
+- ~~[ ] Audit log export → SIEM (Splunk, Datadog, S3)~~ ✓ Sprint 6 (push: Splunk HEC + Datadog Logs API v2; pull: CEF/LEEF/JSON already existed)
 - [ ] Custom GPU alert thresholds per team
 - [ ] Multi-org licence (enterprise with multiple BUs on one instance)
 
