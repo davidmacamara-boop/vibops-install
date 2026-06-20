@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-06-14 · v0.20.0-sprint7_
+_Last updated: 2026-06-20 · v0.20.1-security_
 
 ## Principles
 
@@ -175,6 +175,19 @@ _Last updated: 2026-06-14 · v0.20.0-sprint7_
 
 ### Security
 - [x] CVE scanning — `pip-audit` on all `requirements.txt` + Trivy filesystem scan, blocking on HIGH/CRITICAL, runs on every push and PR
+- [x] **Security Sprint (2026-06-20) — 19 vulnerabilities fixed across 5 commits (v0.20.1)**
+  - CRITICAL: cross-org access bypass in `tenants.py` — `_enforce_org_isolation()` on all 13 org-scoped routes
+  - HIGH: LDAP injection — `escape_filter_chars()` before filter substitution
+  - HIGH: `python-jose` CVEs (PYSEC-2024-232/233) in gateway → replaced with `PyJWT==2.13.0`
+  - HIGH: password reset token logged in plaintext — removed
+  - HIGH: audit ingest `org_id` spoofing — `X-Internal-Key` required in all environments
+  - HIGH: httpOnly cookies + CSRF — ADR-0006 closed; `vibops_access` / `vibops_refresh` cookies, double-submit XSRF pattern, stream tickets for EventSource
+  - MEDIUM: webhook cross-tenant job execution — `org_id` scoping on all webhook-triggered jobs
+  - MEDIUM: Vault key silent plaintext fallback → `ValueError`
+  - MEDIUM: gateway job routes scoped by `org_id`
+  - MEDIUM: gateway `/docs` disabled in production; CORS wildcard guard; `run_kubectl` marked destructive
+  - LOW: `Permissions-Policy` header; CSP `frame-src` scoped to Grafana URL; kubeconfig upload 1 MB limit
+  - HARDENING (11 fixes): real client IP in login alerts, account lockout (5 attempts / 15 min), rate limit on forgot/reset-password, auth bypass dev-only, HSTS, security headers on core, Swagger off in prod, dev token guard, configurable alert email, JWT expiry 2h, no exception leak in proxy
 
 ### Connect Gateway
 - [x] `vibops-worker` standalone image + Helm chart `charts/vibops-connect`
