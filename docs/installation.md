@@ -20,8 +20,10 @@ GPU cluster and a working agent conversation.
 9. [Configuration reference](#9-configuration-reference)
 10. [On-prem LLM (air-gapped / sovereign)](#10-on-prem-llm-air-gapped--sovereign)
 11. [Billing model](#11-billing-model)
-12. [Upgrading](#12-upgrading)
-13. [Uninstalling](#13-uninstalling)
+12. [LLM Inference Proxy](#12-llm-inference-proxy)
+13. [Upgrading](#13-upgrading)
+14. [Troubleshooting](#14-troubleshooting)
+15. [Uninstalling](#15-uninstalling)
 
 ---
 
@@ -129,11 +131,21 @@ A countdown banner appears in the header as the trial or licence approaches expi
 Recommended for: local development, demos, POC with a client.
 Everything runs in Docker on a single machine. No Kubernetes required.
 
-#### Step 1 — Clone and run quickstart
+#### Step 1 — Clone and authenticate
 
 ```bash
-git clone https://github.com/vibops/vibops-install.git
-cd vibops
+git clone https://github.com/VibOpsai/vibops-install.git
+cd vibops-install
+
+# Authenticate to the VibOps container registry (token provided by VibOps)
+make login VIBOPS_REGISTRY_TOKEN=<your-token>
+```
+
+> **Registry token:** VibOps Docker images are hosted on a private registry. You will receive a `VIBOPS_REGISTRY_TOKEN` from VibOps alongside your installation package. This token is required to pull the Docker images. Contact david@vibops.ai if you did not receive one.
+
+#### Step 2 — Run quickstart
+
+```bash
 make quickstart
 ```
 
@@ -143,7 +155,7 @@ make quickstart
 - Starts the full stack with `docker compose up -d`
 - Runs `make check` to verify all services are healthy
 
-#### Step 2 — Set your LLM provider
+#### Step 3 — Set your LLM provider
 
 Open `.env` and set your API key:
 
@@ -163,9 +175,9 @@ LLM_PROVIDER=ollama
 Then restart the agent: `docker compose restart agent`
 
 > **POC mode:** `AUTH_PASSWORD_HASH` is empty by default — the console opens without a login
-> screen. Suitable for a controlled POC environment. See Step 4 to enable auth.
+> screen. Suitable for a controlled POC environment. See Step 5 to enable auth.
 
-#### Step 3 — Verify
+#### Step 4 — Verify
 
 ```bash
 make check
@@ -181,6 +193,7 @@ Services started by the stack:
 | `console` | **8003** | Web UI — open this in your browser |
 | `core` | 8000 | REST API + job engine (Swagger: `/docs`) |
 | `agent` | 8001 | LLM agent |
+| `llm-proxy` | 8004 | LLM inference proxy — per-agent GPU cost attribution |
 | `worker` | — | Celery worker (job execution) |
 | `beat` | — | Celery Beat (scheduled tasks) |
 | `postgres` | 5432 | Database (internal) |
@@ -189,7 +202,7 @@ Services started by the stack:
 | `grafana` | **3000** | Dashboards — admin / `${GRAFANA_PASSWORD:-vibops}` |
 | `backup` | — | Daily `pg_dump` → `/backups/` (30-day retention) |
 
-#### Step 4 — Bootstrap the first admin user (if auth is enabled)
+#### Step 5 — Bootstrap the first admin user (if auth is enabled)
 
 To enable login, generate a password hash and add it to `.env`:
 
@@ -211,7 +224,7 @@ It prints the JWT token directly, ready to use for the first API calls.
 
 Log in at **http://localhost:8003** (or **http://SERVER_IP:8003** on a remote server) with the credentials shown.
 
-> **Pilot clients** — to provision additional client orgs (each isolated), run `make pilot-create-client` once per client. See [`docs/runbooks/pilot-runbook.md`](runbooks/pilot-runbook.md) for the full onboarding checklist.
+> **Pilot clients** — to provision additional client orgs (each isolated), run `make pilot-create-client` once per client.
 
 > **Password reset by email** — for the "Forgot password" flow to send emails, configure `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in `.env` before going live. Without SMTP, the reset token is returned directly in the API response (dev mode only — not suitable for production).
 
@@ -282,7 +295,7 @@ ingress:
 **Generate a password hash for the admin user:**
 
 ```bash
-docker run --rm ghcr.io/vibops/core:latest python -c \
+docker run --rm ghcr.io/vibopsai/core:latest python -c \
   "from app.auth import hash_password; print(hash_password('yourpassword'))"
 # → $2b$12$...
 # Paste the result in authPasswordHash above
@@ -732,16 +745,64 @@ and LLM inference costs are absorbed by the client's own GPU infrastructure.
 
 ---
 
-## 12. Upgrading
+## 12. LLM Inference Proxy
 
-For full upgrade procedures, rollback steps, and Alembic migration reference, see
-[`docs/runbooks/upgrade-migration.md`](runbooks/upgrade-migration.md).
+VibOps includes a transparent OpenAI-compatible proxy (port 8004) that sits between your AI agents and your LLM inference servers. It tracks every inference with per-agent cost attribution.
 
-### Docker Compose (quick reference)
+### Why use it
+
+- **FinOps per agent** — which agent costs how much in GPU
+- **Budget enforcement** — block agents that exceed their monthly spend limit
+- **Model policy** — control which agent can use which LLM model
+- **Anomaly detection** — alert on cost spikes, request surges, error rate jumps
+
+### Configuration
+
+Set the backend routing in `.env`:
 
 ```bash
-git pull && docker compose build && docker compose up -d
-make check   # verify the upgrade
+# Map model name prefixes to upstream LLM servers
+BACKENDS='{"mistral": "http://vllm-mistral:8000", "llama": "http://vllm-llama:8001"}'
+
+# Fallback if no prefix matches
+DEFAULT_BACKEND_URL=http://ollama:11434
+```
+
+### Usage
+
+Point your AI agents (n8n, LangChain, CrewAI, Dify, or any OpenAI-compatible client) to the proxy:
+
+```bash
+# Change your agent's base URL
+OPENAI_BASE_URL=http://SERVER_IP:8004/v1
+
+# Add headers for agent attribution
+curl -X POST http://SERVER_IP:8004/v1/chat/completions \
+  -H "X-VibOps-Agent-Id: pricing-agent-v2" \
+  -H "X-VibOps-Team: supply-chain" \
+  -d '{"model": "mistral:7b", "messages": [...]}'
+```
+
+Results are visible in the console under **FinOps → Agent LLM Usage**.
+
+### Verify
+
+```bash
+curl http://SERVER_IP:8004/health
+# → {"status": "ok", "backend": "http://ollama:11434"}
+
+curl http://SERVER_IP:8004/v1/models
+# → lists available models from all backends
+```
+
+---
+
+## 13. Upgrading
+
+### Docker Compose
+
+```bash
+make update   # pulls latest images, restarts services, runs healthcheck
 ```
 
 ### Helm (quick reference)
@@ -755,7 +816,37 @@ Alembic migrations run automatically on startup (Docker Compose: on core start; 
 
 ---
 
-## 13. Uninstalling
+## 14. Troubleshooting
+
+If something isn't working after installation, generate a debug bundle:
+
+```bash
+make debug
+```
+
+This produces a `vibops-debug-YYYY-MM-DD-HHMMSS.tar.gz` file containing:
+- System info (OS, CPU, RAM, disk, Docker version)
+- Container status and resource usage
+- Logs (last 500 lines per service)
+- Health check results
+- PostgreSQL and Redis connectivity
+- Environment configuration (all secrets automatically redacted)
+
+Send this file to **david@vibops.ai** for support. No secrets are included.
+
+### Common issues
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `make check` fails on core | Database not ready or migration error | `docker compose logs core` — check for Alembic errors |
+| Agent returns empty responses | `LLM_API_KEY` not set or invalid | Check `.env`, then `docker compose restart agent` |
+| Console loads but chat doesn't work | Agent not healthy | `docker compose logs agent` — check LLM provider connectivity |
+| `docker compose pull` fails with 401 | Registry token expired or missing | `make login VIBOPS_REGISTRY_TOKEN=<token>` |
+| GPU cluster not appearing in Fleet | Gateway not connected | Check gateway logs on the cluster side, verify outbound HTTPS to VibOps server |
+
+---
+
+## 15. Uninstalling
 
 ### Docker Compose
 

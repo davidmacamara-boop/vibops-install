@@ -56,9 +56,10 @@
     - [Chargeback](#chargeback-sub-tab)
     - [Alerts](#alerts-sub-tab)
     - [Workloads — per-workload GPU metrics](#workloads-sub-tab--per-workload-gpu-metrics)
-20. [Dataset & RLHF](#20-dataset--rlhf)
-21. [MCP Server](#21-mcp-server)
-22. [Quick reference](#22-quick-reference)
+20. [LLM Inference Proxy — Agent Infrastructure Control Plane](#20-llm-inference-proxy--agent-infrastructure-control-plane)
+21. [Dataset & RLHF](#21-dataset--rlhf)
+22. [MCP Server](#22-mcp-server)
+23. [Quick reference](#23-quick-reference)
 
 ---
 
@@ -2381,7 +2382,123 @@ The history of all budget overruns: when the soft cap or hard cap was reached, w
 
 ---
 
-## 20. Dataset & RLHF
+## 20. LLM Inference Proxy — Agent Infrastructure Control Plane
+
+VibOps includes a transparent OpenAI-compatible proxy (port 8004) that sits between AI agents and LLM inference servers. It captures every inference with per-agent attribution for FinOps, budget enforcement, model policy, and anomaly detection.
+
+### How it works
+
+```
+AI Agents (n8n, LangChain, CrewAI, Dify, or any OpenAI-compatible client)
+        ↓ POST /v1/chat/completions
+        ↓ Headers: X-VibOps-Agent-Id + X-VibOps-Team
+VibOps LLM Proxy (:8004)
+    1. Identify agent (cached 60s)
+    2. Check budget (cached 10s) → 429 if exceeded
+    3. Check model policy (cached 60s) → 403 if denied
+    4. Route to backend by model prefix
+    5. Forward request (streaming supported)
+    6. Measure tokens + latency
+    7. Calculate cost (token rate or GPU time)
+    8. Log async (batch every 5s)
+        ↓
+LLM Backends (vLLM, Ollama, TGI)
+```
+
+### Configuration
+
+Set backend routing in `.env`:
+
+```bash
+BACKENDS='{"mistral": "http://vllm-mistral:8000", "llama": "http://vllm-llama:8001"}'
+DEFAULT_BACKEND_URL=http://ollama:11434
+```
+
+### Agent attribution
+
+Your agents add two headers:
+
+| Header | Purpose | Example |
+|--------|---------|---------|
+| `X-VibOps-Agent-Id` | Unique agent identifier | `pricing-agent-v2` |
+| `X-VibOps-Team` | Team or cost centre | `supply-chain` |
+
+### FinOps per agent
+
+Visible in the console under **FinOps → Agent LLM Usage**:
+
+| Agent | Model | Requests | Tokens | GPU-hrs | Cost |
+|-------|-------|----------|--------|---------|------|
+| pricing-v2 | llama-70b | 5,000 | 18.2M | 210h | $6,300 |
+| supply-chain | mistral-7b | 8,100 | 11.4M | 89h | $2,670 |
+
+Or via the agent chat:
+
+```
+"Which agent costs the most this month?"
+"Show me the cost breakdown for pricing-agent-v2"
+```
+
+### Budget per agent
+
+Set monthly spend limits. When the hard cap is reached, the proxy returns 429.
+
+```
+"Set a $500/month budget on pricing-agent-v2"
+```
+
+API: `POST /api/v1/finops/agent-budgets`
+MCP: `set_agent_budget("pricing-agent-v2", 500)`
+
+### Model policy per agent
+
+Control which models each agent can use. Glob patterns supported.
+
+```
+"Allow pricing agents only on Mistral models"
+```
+
+API: `POST /api/v1/policy/agent-model-rules`
+MCP: `update_agent_model_rule("pricing-*", allowed_models=["mistral-*"])`
+
+If an agent tries to use a denied model, the proxy returns 403.
+
+### Anomaly detection per agent
+
+Celery Beat scans `inference_logs` every 10 minutes for three anomaly classes:
+
+| Anomaly | Trigger | Severity |
+|---------|---------|----------|
+| `agent_cost_spike` | Cost in last hour > 3x 7-day average | Warning |
+| `agent_request_surge` | Requests in last hour > 5x 7-day average | Warning |
+| `agent_error_spike` | Error rate > 20% in last hour | Warning / Critical |
+
+Anomalies appear in the console under **Fleet → Anomalies** (filter: `llm-proxy`).
+
+### Verify
+
+```bash
+# Health check
+curl http://SERVER_IP:8004/health
+
+# List available models across all backends
+curl http://SERVER_IP:8004/v1/models
+```
+
+### MCP tools
+
+| Tool | Description |
+|------|-------------|
+| `get_agent_usage` | Per-agent inference cost, tokens, requests |
+| `get_agent_usage_detail` | Daily breakdown for one agent |
+| `get_agent_budget` | Current budget + spend for an agent |
+| `set_agent_budget` | Set monthly spend limit |
+| `get_agent_model_rules` | List model access rules |
+| `update_agent_model_rule` | Create model access rule |
+
+---
+
+## 21. Dataset & RLHF
 
 VibOps builds an operational dataset from real production actions — the foundation for fine-tuning specialized GPU models.
 
@@ -2417,7 +2534,7 @@ GET /api/v1/training/export?format=alpaca
 
 ---
 
-## 21. MCP Server
+## 22. MCP Server
 
 VibOps exposes its tools via the **Model Context Protocol** (MCP) — allowing any MCP client (Claude Desktop, Cursor, IDE) to operate GPU infrastructure directly from its own context.
 
@@ -2454,7 +2571,7 @@ See the [`vibops-mcp`](https://github.com/VibOpsai/vibops-mcp) repository for th
 
 ---
 
-## 22. Quick reference
+## 23. Quick reference
 
 ### Keyboard shortcuts
 
