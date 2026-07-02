@@ -3318,3 +3318,32 @@ python -c "import secrets; print(secrets.token_hex(32))"
 - API: `docs/openapi.json`
 - Issues: open a ticket with your VibOps contact
 - License and pricing: `david@vibops.ai`
+
+---
+
+## Console UI Structure (updated July 2026)
+
+### Main Navigation — 5 tabs
+
+| Tab | Purpose |
+|-----|---------|
+| **Dashboard** | Overview: cluster status, GPU utilization, alerts, morning brief |
+| **Fleet** | GPU fleet management: clusters, deployments, GPU metrics, anomalies |
+| **Agents** | AI agents discovered through the LLM Proxy: cost, requests, GPU-hours per agent |
+| **FinOps** | GPU cost management: spend trends, budgets, chargeback, waste detection, agent LLM usage |
+| **Settings (⚙)** | All configuration organized in 6 categories |
+
+### Settings — 6 categories
+
+| Category | Sub-tabs | Purpose |
+|----------|----------|---------|
+| **Organization** | Teams, Users, Licence | Org structure, roles, licence management |
+| **Infrastructure** | Clusters, Gateways, Git, CI, Integrations | Connect clusters, configure Git/CI, external integrations (Datadog, SIEM) |
+| **Governance** | Tool Policy, Org Policy, Approvals, Agent Tools | Access control, policy-as-code, approval gates, tool catalog (205 actions) |
+| **Operations** | Notifications, Secrets, Memories | Alert channels, encrypted secrets, agent memory |
+| **Compliance** | Audit, Eval, Data | Immutable audit log, LLM-as-judge evaluation, training dataset |
+| **Security** | SSO/LDAP, API Tokens | Enterprise SSO (OIDC), LDAP/AD integration, API token management |
+
+### Chat Panel
+
+The chat panel (right sidebar) is available from any tab. It provides natural language access to all 205 tools via the VibOps agent. Click the chat icon in the header to open/close.
