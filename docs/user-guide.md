@@ -1733,9 +1733,10 @@ Configure where VibOps sends its alerts: detected incidents, fired triggers, com
 | Channel | What to configure | When to use |
 |-------|------------------------|-----------------|
 | **Slack Incoming Webhook** | Slack webhook URL (e.g. `https://hooks.slack.com/...`) | Alerts in a Slack channel |
-| **HTTP Webhook** | URL + optionally a secret for signing requests | Custom integration (PagerDuty, Opsgenie, etc.) |
+| **HTTP Webhook** | URL + optionally a secret for signing requests | Custom integration (Opsgenie, etc.) |
 | **Email (SMTP)** | SMTP server, port, user, password, recipients | Email alerts |
 | **PagerDuty** | PagerDuty Integration Key | Incident escalation |
+| **Datadog** | Datadog API Key + site (default: `datadoghq.com`) | Events in Datadog Event Stream |
 
 **Create a notification channel:**
 1. Admin → **Notifications** sub-tab
@@ -1763,6 +1764,17 @@ Configure where VibOps sends its alerts: detected incidents, fired triggers, com
 
 > **Gmail**: use an "App Password" (Google account → Security → App passwords), not your regular Google password.
 
+**Datadog configuration:**
+1. In Datadog: go to Organization Settings → API Keys → New Key
+2. Copy the API key
+3. In VibOps: create a channel of type **Datadog**, paste the API key
+4. Optionally set the site (`datadoghq.eu` for EU, `us3.datadoghq.com` for US3, etc.)
+
+VibOps events appear in your Datadog Event Stream with `source:vibops` tag.
+
+**Delivery queue & retries:**
+All webhook notifications (Slack, HTTP, PagerDuty, Datadog) are queued with automatic retries on failure. If a destination returns a 5xx error or is unreachable, VibOps retries with exponential backoff (30s, 2min, 8min, 30min, 2h — up to 5 attempts). View delivery status in Settings → Notifications → Delivery Log.
+
 **Test a channel:**
 After creation, manually trigger a trigger or a Morning Brief to verify the notification arrives.
 
@@ -1784,6 +1796,7 @@ Connect VibOps to your external tools so the agent can use them automatically.
 | **Grafana** | Receive Grafana/AlertManager alerts in VibOps | The webhook URL to configure in Grafana — VibOps side is automatic |
 | **NGC (NVIDIA)** | Deploy NIMs from the NVIDIA catalog | NGC API key (obtained at `ngc.nvidia.com`) |
 | **ArgoCD** | GitOps synchronization, application status | ArgoCD URL + admin token |
+| **Datadog** | Query metrics, submit custom metrics, push events, receive alerts | `DATADOG_API_KEY` + `DATADOG_APP_KEY` env vars |
 
 **How to configure an integration:**
 1. Admin → **Integrations** sub-tab

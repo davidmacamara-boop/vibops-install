@@ -613,7 +613,8 @@ pre-filled in the UI. Do not use in production.
 | **LLM local** | `OLLAMA_URL` | default set | if `LLM_PROVIDER=ollama` |
 | **Grafana** | `GRAFANA_PASSWORD` | ✓ `make quickstart` | |
 | **Git** | `GIT_PROVIDER`, `GIT_TOKEN`, `GIT_URL` | | optional |
-| **Datadog** | `DATADOG_API_KEY`, `DATADOG_APP_KEY` | | optional |
+| **Datadog** | `DATADOG_API_KEY`, `DATADOG_APP_KEY`, `DATADOG_SITE` | | optional |
+| **OpenTelemetry** | `OTEL_EXPORTER_OTLP_ENDPOINT` | | optional — OTLP traces + metrics |
 | **SMTP** | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` | | optional |
 | **Internal** | `CORE_API_URL`, `AGENT_API_URL` | ✓ do not change | |
 
@@ -673,6 +674,8 @@ pre-filled in the UI. Do not use in production.
 | `GITHUB_WEBHOOK_SECRET` | Shared secret for incoming webhooks (GitHub or GitLab) |
 | `DATADOG_API_KEY` | Datadog API key |
 | `DATADOG_APP_KEY` | Datadog application key |
+| `DATADOG_SITE` | Datadog site (default: `datadoghq.com`, EU: `datadoghq.eu`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint (e.g. `http://otel-collector:4317`) — enables traces + metrics export to Datadog, Grafana, New Relic, etc. |
 | `NGC_API_KEY` | NVIDIA NGC key for NIM model pulls |
 
 ---
