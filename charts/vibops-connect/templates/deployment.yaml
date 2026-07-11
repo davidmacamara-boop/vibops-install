@@ -40,6 +40,26 @@ spec:
               value: {{ .Values.gateway.orgId | quote }}
             - name: PROMETHEUS_URL
               value: {{ .Values.prometheus.url | quote }}
+            {{- if .Values.platformType }}
+            - name: PLATFORM_TYPE
+              value: {{ .Values.platformType | quote }}
+            {{- end }}
+            {{- if .Values.proxmox.url }}
+            - name: PROXMOX_URL
+              value: {{ .Values.proxmox.url | quote }}
+            - name: PROXMOX_USER
+              value: {{ .Values.proxmox.user | quote }}
+            - name: PROXMOX_TOKEN_ID
+              value: {{ .Values.proxmox.tokenId | quote }}
+            - name: PROXMOX_TOKEN
+              value: {{ .Values.proxmox.token | quote }}
+            {{- end }}
+            {{- if .Values.xenOrchestra.url }}
+            - name: XO_URL
+              value: {{ .Values.xenOrchestra.url | quote }}
+            - name: XO_TOKEN
+              value: {{ .Values.xenOrchestra.token | quote }}
+            {{- end }}
             {{- if .Values.kubeconfig.secretName }}
             - name: KUBECONFIG
               value: {{ printf "%s/config" .Values.kubeconfig.mountPath | quote }}

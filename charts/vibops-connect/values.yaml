@@ -37,6 +37,23 @@ kubeconfig:
   secretName: ""
   mountPath: "/root/.kube"
 
+# ── Platform type ──────────────────────────────────────────────────────────────
+# "kubernetes" (default) or "hypervisor"
+platformType: ""
+
+# ── Hypervisor config (when platformType=hypervisor) ──────────────────────────
+# Proxmox VE
+proxmox:
+  url: ""          # https://proxmox.example.com:8006
+  user: "root@pam"
+  tokenId: ""
+  token: ""
+
+# Xen Orchestra (Vates / XCP-ng)
+xenOrchestra:
+  url: ""          # https://xo.example.com
+  token: ""
+
 # ── Prometheus local ───────────────────────────────────────────────────────────
 prometheus:
   url: "http://prometheus-operated:9090"

@@ -615,6 +615,8 @@ pre-filled in the UI. Do not use in production.
 | **Git** | `GIT_PROVIDER`, `GIT_TOKEN`, `GIT_URL` | | optional |
 | **Datadog** | `DATADOG_API_KEY`, `DATADOG_APP_KEY`, `DATADOG_SITE` | | optional |
 | **OpenTelemetry** | `OTEL_EXPORTER_OTLP_ENDPOINT` | | optional — OTLP traces + metrics |
+| **Proxmox VE** | `PROXMOX_URL`, `PROXMOX_USER`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN` | | optional — VM management |
+| **Xen Orchestra** | `XO_URL`, `XO_TOKEN` | | optional — XCP-ng VM management |
 | **SMTP** | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` | | optional |
 | **Internal** | `CORE_API_URL`, `AGENT_API_URL` | ✓ do not change | |
 
