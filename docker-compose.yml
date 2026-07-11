@@ -69,6 +69,7 @@ services:
       start_period: 15s
     networks:
       - vibops_net
+      - kind  # Accessible by VibOps Connect pods running in kind clusters
 
   worker:
     build:
@@ -353,3 +354,5 @@ volumes:
 networks:
   vibops_net:
     driver: bridge
+  kind:
+    external: true
