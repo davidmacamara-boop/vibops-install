@@ -9,6 +9,148 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.23.0] — 2026-07-20
+
+### Added
+- **VMware vSphere connector** — vCenter API via pyVmomi; 9 actions: `vsphere_list_vms`, `vsphere_get_vm`, `vsphere_get_vm_metrics`, `vsphere_list_hosts`, `vsphere_start_vm`, `vsphere_stop_vm`, `vsphere_restart_vm`, `vsphere_migrate_vm`, `vsphere_create_snapshot`
+- **9 vSphere tools in agent catalog** — dispatched via agent tool router; connector supports multi-vCenter via `vsphere_config` on gateway
+- **HITL on vSphere write actions** — mandatory human confirmation before `vsphere_stop_vm`, `vsphere_restart_vm`, `vsphere_migrate_vm`, `vsphere_create_snapshot`; agent enforces via confirmation gate
+- **MCP: 83 tools total** — up from 68 (vSphere + Proxmox/XO additions + Tersedia demo tools)
+- **Tersedia demo** — VM simulation mode with agent gateway fallback for demo environments
+
+### Fixed
+- **Security (round 4)**: 4 CRITICAL + 14 HIGH + 5 MEDIUM — includes rate limiting bypass, org isolation bypass, audit log spoofing, LDAP injection fix, exception detail leakage
+- **`fix(audit)`**: HMAC chain per-org scoping + explicit timestamp on audit entry creation (prevents cross-org HMAC drift)
+- **`fix(llm-proxy)`**: Dockerfile COPY paths corrected for root build context
+
+---
+
+## [0.22.3] — 2026-07-18
+
+### Fixed
+- **Security audit (third pass)**: 4 MEDIUM + 3 LOW — rate limiting edge cases, minor info-disclosure issues; 31 findings total closed across 3 audit passes
+
+---
+
+## [0.22.2] — 2026-07-18
+
+### Fixed
+- **Security audit (Sonnet)**: 2 CRITICAL + 5 HIGH + 4 MEDIUM — JWT secret exposure, SSRF via webhook URLs, cross-org data access, CORS misconfiguration, upload size bypass
+
+---
+
+## [0.22.1] — 2026-07-17
+
+### Fixed
+- **Security audit (Opus)**: 1 CRITICAL + 5 HIGH — token log leak, kubectl gate missing, vault fallback scope, gateway credential isolation; remaining MEDIUM findings patched
+
+---
+
+## [0.22.0] — 2026-07-11
+
+### Added
+- **Proxmox VE connector** — VM lifecycle: `proxmox_list_vms`, `proxmox_start_vm`, `proxmox_stop_vm`, `proxmox_migrate_vm`, `proxmox_create_snapshot`; node-level operations via Proxmox REST API
+- **Xen Orchestra (Vates) connector** — `xo_list_vms`, `xo_start_vm`, `xo_stop_vm`, `xo_migrate_vm`, `xo_snapshot_vm`; connects to XO API
+- **Hypervisor gateway type** — `gateway_type=hypervisor` in gateway registration; connects to Proxmox or XO endpoints
+- **VM fleet UI** — Fleet sub-tabs (Clusters | VMs); VM KPI bar (total VMs, running, stopped); All VMs table with status badges, hypervisor type, host
+- **VM Fleet actions** — start/stop/migrate from console; VM Alert Rules (threshold-based on CPU, memory, state)
+- **VM anomaly detection** — threshold evaluation (CPU spike, memory pressure, unexpected stop); integrates with existing anomaly engine
+- **VM FinOps** — per-VM cost attribution endpoint `GET /finops/vms/{id}/cost`; VM cost agent tool
+- **Proxmox + Xen Orchestra tools in agent catalog** — 10 VM tools dispatched via agent; system prompt updated with hypervisor workflow
+- **CI**: auto-build 6 Docker images on version tag; auto-create GitHub Release with changelog; auto-sync vibops-install repo on release
+
+### Fixed
+- CI: VIBOPSAI_PAT for GHCR push to vibopsai org
+
+---
+
+## [0.21.0] — 2026-07-11
+
+### Added
+- **LLM inference proxy** (`llm-proxy/`) — transparent OpenAI-compatible proxy; per-agent GPU FinOps attribution; backend API key forwarding for cloud LLM APIs (Anthropic, OpenAI, Groq)
+- **Agent control plane** — 3 extensions: budget guard (abort on limit breach), anomaly detection integration, configurable model policy (`GET/PUT /agent/model-rules`); 6 Agent FinOps tools in catalog
+- **Thinking modes** — `THINKING_MODE` env (auto/enabled/adaptive/disabled); extended thinking for DeepSeek V4/R1, Nemotron (`enable_thinking` + `reasoning_budget`), OpenAI-compatible models (`reasoning_effort`); budget_tokens configurable
+- **Cerebras WSE connector** — 8th accelerator vendor; CS-3 wafer-scale cluster: deploy model, submit training job, monitor throughput; `cerebras_*` agent tools in catalog
+- **Compute-type aware cost model** — separate rate schedules for GPU, CPU, LPU, API; `compute_type` field on Job and ClusterRate; cost formula adapts by type
+- **Datadog Marketplace-ready** — 5 integration gaps closed: custom metric namespaces, log facets, dashboard JSON templates, service check definitions, Datadog Agent tile manifest
+- **CPU-only K8s support** — resource metrics (CPU/memory), anomaly detection (CPU spike, OOM), adaptive console UI (hides GPU-specific panels when no GPU detected)
+- **Console Agents tab** — renamed Agent → Agent Tools; 10 tools visible in catalog; Playwright Agent FinOps demo with seed script
+
+### Tests
+- Agent L1/L2/L3 suite expanded; connector tests cover Cerebras, LLM proxy integration
+
+---
+
+## [0.20.1] — 2026-06-27
+
+### Added
+- **Auth: first-run setup wizard** — replaces env-var bootstrap; guided admin account creation on first start; `ADMIN_EMAIL/ADMIN_PASSWORD` env-based DB bootstrap as fallback
+- **Login email alert** — email sent on every login attempt (success and failure) for security monitoring
+- **LDAP/Active Directory authentication** — `GET/PUT /admin/ldap/config`; LDAP bind, user search, group mapping; Security admin tab in console; LDAP login form with fallback to local auth
+- **MCP Sprint 6**: +9 tools (68 total) — `get_ldap_config`, `update_ldap_config`, `push_to_siem`, `get_siem_config`, `update_siem_config`, `registry_list_repos`, `registry_list_tags`, `registry_check_image`, `registry_delete_tag`
+- **ContainerRegistry connector** — OCI v2 Bearer auth; list repos, list/delete tags, check image existence
+- **Kubeconfig import** — `POST /clusters/import`; upload kubeconfig from console; auto-creates gateway record and deploys VibOps Connect
+- **Pipeline templates** — `deploy_vibops` and `connect_gpu_cluster` templates in console Pipelines tab; one-click scaffold
+- **Console UX** — Admin → Gateways moved from Monitoring to Admin tab; inline CSP credential forms in cluster connect wizard; empty-state for clusters
+
+### Fixed
+- Docs/README: tool count aligned to 74, vibops.io → vibops.ai
+
+---
+
+## [0.20.0] — 2026-06-14
+
+### Added
+- **Cloud pricing API** — real-time GPU rates from AWS EC2, Azure NDv4/NCv3, GCP A100; `POST /finops/cloud-pricing/sync`; rates stored as ClusterRate records; agent uses live rates in cost computations
+- **Huawei Ascend NPU connector** — 9th accelerator vendor (Ascend 910B); wired to agent dispatch + system prompt; multi-vendor fleet now covers H100/MI300X/Ascend-910B
+- **White-label routing** — `X-CSP-Domain` header routing for CSP resellers with custom domains; `white_label_slug` on Organization
+- **SIEM export** — `GET /audit/export?format=json|cef|leef`; bulk audit log export for SOC ingestion (Splunk, QRadar, Elastic)
+- **Signed billing export** — `GET /finops/billing/export`; HMAC-SHA256 signature in `X-VibOps-Signature` header for billing system integration
+- **Approval gate: user context** — username and org attached to every pending gate; visible to approver in console
+- **Helm v0.20.0** — `values.production.yaml` full rewrite (PDB, gp3 storage class, HPA config, IRSA/WI annotations, JWT 8h expiry); step-by-step production runbook in `docs/runbooks/production-deployment.md`
+
+### Fixed
+- **Security (pre-v0.20.0 audit)**: 17 findings — all protected routes JWT-gated at router level; DELETE routes require `confirmed=true`; 5 CRITICAL + 9 MAJOR + 3 MINOR closed
+
+---
+
+## [0.19.0] — 2026-06-04
+
+### Added
+- **Vendor-specific tool catalogs** — AMD ROCm, Intel Gaudi, AWS Trainium, Groq, Outscale: each connector exposes a curated tool subset matching accelerator capabilities
+- **Dynamic agent tool loading** — connector `gateway_type` drives which tools are presented to the LLM; reduces token usage and hallucination on single-vendor deployments
+- **Agent rules 14-16** — budget guard (abort if within 10% of budget), gateway fallback (retry on alternate gateway), unknown tool safe decline
+
+---
+
+## [0.18.1] — 2026-05-31
+
+### Added
+- **Async external approval gate** — `POST /agent/approvals`, `POST /agent/approvals/{gate_id}/respond`; agent blocks on destructive actions until human approves/rejects; configurable per-action in Tool Policy
+- **HMAC-chained tamper-evident audit log** — each entry signed `HMAC(prev_hash || payload || timestamp)`; `GET /audit/verify-chain` validates integrity; per-org chain isolation
+- **Agent tool catalog** (OPS-A01) — console Agents tab with visual catalog; tag-based search/filter (closes issue #2); schema drawer shows parameters per tool; autofill from catalog into agent prompt
+- **Tool Policy sub-tab** — Admin → Tool Policy; per-action toggles for `requires_confirmation` and `requires_approval`; org-scoped; OPS-D01/E03/E06 compliance
+- **Per-org approval notifications** — configurable webhook or console sub-tab for pending gates; closes issue #5
+- **Sprint 3** — execution history (closes #1), job replay by `job_id` (closes #3), LLM-as-judge evaluation with any VibOps LLM provider (closes #4)
+- **Sprint 4** — anomaly detection integration in agent context, live cost attribution in job detail, L2 coherence auto-scanner
+- **Sprint 5** — compliance report generation (closes #7), SSO OIDC (closes #8), agent identity lifecycle: `create_agent_identity`, `rotate_agent_identity`, `revoke_agent_identity` (closes #9/#10), dependency graph `GET /agent/dependencies` (closes #11)
+- **i18n** — English defaults throughout console; French translations in `console/static/i18n/fr.json`
+- **Declarative YAML policy rules** — `GET/PUT /policy/rules`; OPA/Rego-compatible rule format; org-level policy override with audit trail; closes issue #6
+- **MCP: 26 new governance & FinOps tools** (59 total) — `get_budget`, `set_agent_budget`, `get_spend_trend`, `get_chargeback`, `get_waste_analysis`, `get_workload_breakdown`, `get_cluster_rate`, `set_cluster_rate`, `list_ai_act_controls`, `get_ai_act_score`, `update_ai_act_control`, `generate_compliance_report`, `get_compliance_report`, `list_compliance_reports`, `verify_audit_chain`, `list_audit_logs`, and 10 additional governance tools
+
+---
+
+## [0.18.0] — 2026-05-17
+
+### Added
+- **Sprint D: GPU pricing management API** — `GET/POST/PUT/DELETE /finops/pricing`; `markup_pct` field on PricingTier for reseller margin; pricing rules cascade through reseller chain
+- **FinOps visual dashboard** — single scrollable page replaces sub-tabs; SVG utilization gauge; Chart.js spend trend (30-day); CFO-ready cost bars by namespace; app sidebar popover for drill-down
+- **Fleet table** — cluster removal (✕ button per row, `DELETE /gateways/{id}/clusters/{cluster_name}`); persistent `removed_clusters` list (prevents ping re-adding); search filter; compact layout; CPU/Memory/Pods columns
+- **VibOps Connect: cluster auto-discovery** — gateway heartbeat discovers all clusters from kubeconfig and reports metrics (CPU, memory, GPU, pods) per context; multi-context Fleet health without manual registration
+- **NIM merged into LLM tab** — Ollama | NIM sub-tabs; unified LLM endpoint management
+
+---
+
 ## [0.17.6] — 2026-05-13
 
 ### Added
@@ -166,42 +308,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.16.3] — 2026-05-08
 
 ### Added
-- **`k3s_load_image`** (DockerBuildConnector) — `docker save <image> | k3s ctr images import -`; completes local cluster coverage (kind/k3d/minikube/k3s)
-- **`create_ecr_pull_secret`** (KubectlConnector) — fetches ECR token via `aws ecr get-login-password`, creates pull secret; tokens valid 12h
-- **`create_gcr_pull_secret`** (KubectlConnector) — GCP service account JSON key → Kubernetes pull secret
-- **`create_acr_pull_secret`** (KubectlConnector) — Azure service principal / ACR admin credentials → Kubernetes pull secret
-- **`argocd_enable_auto_sync`** (ArgoCDConnector) — enables `syncPolicy.automated` via ArgoCD API (GET → patch → PUT); options: `prune`, `self_heal`
-- **`argocd_disable_auto_sync`** (ArgoCDConnector) — removes `syncPolicy.automated`
-- **`openshift_add_scc`** (KubectlConnector) — `oc adm policy add-scc-to-user`; falls back to kubectl if `oc` absent
-- **`openshift_create_route`** (KubectlConnector) — `oc expose service` with optional hostname
-- `system_prompt.md` routing rules for all new actions (cloud pull secrets, ArgoCD auto-sync, OpenShift)
-
-### Documentation
-- **Scenario 27** — ArgoCD auto-sync: GitOps loop closure via one prompt; ROI: $9,975/year manual sync overhead + $2,256–$3,384/year missed sync incidents
-- **Scenario 28** — Cloud registry deploy (ECR/GCR/ACR): unified pull secret interface across AWS/GCP/Azure; ROI: $15,625/year ECR token refresh overhead
-- **Scenario 29** — OpenShift deploy: SCC + Route in same prompt as deploy; ROI: $19,500–$39,000/year platform team ticket overhead
-- `README.md` GitOps section updated: ArgoCD auto-sync flow, cloud registry patterns, OpenShift flow
-- `docs/demo-scenarios.md`: 26 → 29 scenarios
-
----
-
-## [0.16.2] — 2026-05-07
-
-### Added
-- **`create_pull_secret`** (KubectlConnector) — creates or updates a Kubernetes docker-registry pull secret; idempotent (`--dry-run=client -o yaml | kubectl apply`); works on EKS, GKE, AKS, RKE2, bare metal, and local clusters
-- **`deploy_webapp`** updated — new `image_pull_secret` param; patches Deployment with `imagePullSecrets` spec after creation
-- **`kind_load_image`** — loads a locally built Docker image into a kind cluster's containerd runtime (`kind load docker-image`)
-- **`k3d_load_image`** — loads a locally built image into a k3d cluster (`k3d image import`)
-- **`minikube_load_image`** — loads a locally built image into a minikube cluster (`minikube image load [-p <profile>]`)
-- **Scenario 26** in `docs/demo-scenarios.md` — private registry deploy on K8s: `create_pull_secret` → `deploy_webapp(image_pull_secret=...)`, with ROI
+- **`create_pull_secret`** (KubectlConnector) — creates or updates a Kubernetes docker-registry pull secret; idempotent; works on EKS, GKE, AKS, RKE2, bare metal, local clusters
+- **`deploy_webapp`** updated — new `image_pull_secret` param
+- **`kind_load_image`**, **`k3d_load_image`**, **`minikube_load_image`**, **`k3s_load_image`** — load locally built images into local cluster runtimes
+- **`create_ecr_pull_secret`** / **`create_gcr_pull_secret`** / **`create_acr_pull_secret`** — cloud-specific pull secrets (AWS/GCP/Azure)
+- **`argocd_enable_auto_sync`** / **`argocd_disable_auto_sync`** — GitOps auto-sync via ArgoCD API
+- **`openshift_add_scc`** / **`openshift_create_route`** — OpenShift-specific actions
 
 ### Tests
-- 3 kubectl chain tests (`test_kubectl_connector.py`): full `create_pull_secret` → `deploy_webapp` sequence, failure-blocks-deploy, patch failure propagation
-- 10 new connector tests for `k3d_load_image` and `minikube_load_image`
+- 13 new connector tests (pull secrets, local cluster loading)
 
 ### Documentation
-- `README.md` — GitOps section updated with private registry K8s deploy flow and local cluster load patterns
-- `system_prompt.md` — routing rules for all local cluster patterns (kind/k3d/minikube) and production private registry pattern
+- Scenarios 26–29 in `docs/demo-scenarios.md` — private registry, ArgoCD, cloud registry, OpenShift
 
 ---
 
@@ -514,95 +632,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [0.10.0-security] — 2026-04-22
+## Pre-release development history
 
-_(Sprint 10 security block — see v0.10.0 above for the full entry)_
+> **Note:** Versions below predate the production versioning scheme (v0.3.0+, April 28 2026).
+> They document the rapid prototyping phase where the full stack was built between April 5–22, 2026.
+> Original CHANGELOG entries used approximate monthly dates; actual commit dates are shown below.
 
----
+### v0.10.0-security — 2026-04-22 (`79803a8`)
 
-## [0.9.1] — 2026-04-15
+- Security hardening: path traversal fix, attack payload tests, null byte protection
 
-### Added
-- **VibOps Connect — Gateway CRUD**: register, list, revoke gateways; token shown once, stored as SHA-256 hash
-- **Gateway token auth**: per-gateway Bearer token independent of JWT
-- **Job routing to gateways**: auto-routing by cluster overlap; `GET /jobs?gateway_id=`
-- **Connect worker** (`connect/worker.py`): async polling loop — claim, execute, report
-- **`scripts/connect-setup.sh`**: one-command gateway onboarding
-- **Monitoring tab**: unified Grafana + Connect Gateways sub-tabs
-- **GPU Simulator**: Python DCGM exporter (2×A100 sinusoidal for demo environments)
-- **Gateway-aware agent**: `format_gateways()` in system prompt; `list_gateways`, `run_on_gateway`, `search_jobs`, `diagnose_cluster` tools
+### v0.9.1 — 2026-04-15 (`9a6a469`)
 
-### Fixed
-- JWT / gateway token collision (moved gateway router outside JWT router)
-- LLM streaming jank: deferred `marked.parse()` to end of stream
+- VibOps Connect: gateway CRUD, token auth, job routing, Connect worker
+- GPU Simulator (2×A100 sinusoidal); gateway-aware agent tools
+- 36 new tests (gateway + connect + agent)
 
-### Tests
-- 19 gateway + 9 connect worker + 8 agent gateway tests
+### v0.8.1 — 2026-04-12 (`a6307ba`)
 
----
+- i18n (8 languages); streaming UI (token-by-token, `⌘K`); EventSource JWT auth
+- OpenAPI contract in CI
 
-## [0.8.1] — 2026-04-12
+### v0.7.1 — 2026-04-11 (`e7d21ee`)
 
-### Added
-- **i18n**: 8 languages (EN, FR, ES, DE, IT, PT, JA, ZH); agent responses follow UI language
-- **Streaming UI**: token-by-token with blinking cursor, sticky scroll, `⌘K` shortcut
-- **EventSource auth**: JWT accepted as `?token=` query param
-- **OpenAPI contract in CI**: `docs/openapi.json` diff-checked on every PR
+- Real-time job log SSE streaming; job cancel from chat; multi-cluster context selector
 
----
+### v0.6.1 — 2026-04-09
 
-## [0.7.1] — 2026-03
+- Notification channels (Slack); Secrets vault UI; GPU alert presets; pipeline memory
 
-### Added
-- Real-time job log SSE streaming; job cancel from chat panel
-- Multi-cluster context selector; kubeconfig auto-scan
+### v0.5.1 — 2026-04-09
 
----
+- Multi-tenancy RBAC; GPU Observability Stack (DCGM + Prometheus + Grafana)
+- NIM; GPU QoS & Reservation; MIG; GPU time-slicing; EKS/GKE/AKS/ArgoCD/Helm/Terraform connectors
 
-## [0.6.1] — 2026-02
+### v0.4.2 — 2026-04-10 (`84c976a`)
 
-### Added
-- Notification channels (Slack webhook); Secrets vault admin UI
-- GPU alert presets; persistent pipeline memory; auto-preference memory
-- `patch_deployment` live resource patching; GitHub token auto-injection
+- Pipelines; Secrets vault (Fernet AES); Audit trail; Structured logging
+- CI/CD pipeline (GitHub Actions); SLO tests (Locust); HA manifests
 
----
+### v0.3.2 — 2026-04-08 (`823c580`)
 
-## [0.5.1] — 2026-01
-
-### Added
-- Multi-tenancy RBAC (Organisation → Team → Member); GPU Observability Stack (DCGM + Prometheus + Grafana)
-- NIM integration; GPU QoS & Reservation; MIG support; GPU time-slicing
-- EKS/GKE/AKS/ArgoCD/Helm/Terraform connectors; conversation history; auto-rollback; GitHub Webhooks
-
----
-
-## [0.4.2] — 2025-12
-
-### Added
-- Pipelines (multi-step with branching); Secrets vault (Fernet AES); Audit trail; Structured logging (JSON + OTEL)
-- CI/CD pipeline (GitHub Actions); SLO tests (Locust); HA manifests (HPA + PDB); Grafana SLO dashboard
-
----
-
-## [0.3.2] — 2025-11
-
-### Added
 - Console redesign (GitHub Dark); Discovery engine; Cluster resources tab
-- GPU support (NVIDIA/AMD/Intel/Groq); Datadog + Ollama connectors; kind management; Triggers; Pipelines UI
+- GPU vendor-agnostic layer + NVIDIA MIG/Operator/DCGM connector
 
----
+### v0.2.0 — 2026-04-05 (`b34e7d7`)
 
-## [0.2.0] — 2025-10
-
-### Added
-- Claude agent with agentic loop + guardrails; kubectl + git connectors; JWT auth; Multi-tenancy DB schema
+- Claude agent with agentic loop + guardrails; kubectl + git connectors; JWT auth
 - Helm chart; OpenAI-compatible gateway proxy
 
----
+### v0.1.0 — 2026-04-05 (`133fe66`)
 
-## [0.1.0] — 2025-09
-
-### Added
 - Core Execution Engine (Celery + Redis); FastAPI core (SQLAlchemy async, Alembic, PostgreSQL)
 - Docker Compose local dev stack; Initial project structure

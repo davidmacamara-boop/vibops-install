@@ -197,6 +197,33 @@ grafanaDashboard:
   enabled: false          # activer si grafana sidecar est configuré (label grafana_dashboard: "1")
   namespace: ""           # défaut: même namespace que la release (ou "monitoring" si Grafana est ailleurs)
 
+# ── Security Context (applied to all pods) ───────────────────────────────────
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# ── Alembic initContainer resources ──────────────────────────────────────────
+alembicInit:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+# ── Network Policies ─────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true
+
 # ── ServiceAccount ────────────────────────────────────────────────────────────
 serviceAccount:
   create: true
