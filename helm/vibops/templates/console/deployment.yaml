@@ -38,4 +38,16 @@ spec:
               value: {{ printf "http://%s-core:%d" (include "vibops.fullname" .) (.Values.core.service.port | int) | quote }}
           resources:
             {{- toYaml .Values.console.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
 {{- end }}
