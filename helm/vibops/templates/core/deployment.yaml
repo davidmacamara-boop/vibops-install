@@ -40,7 +40,7 @@ spec:
         - name: alembic-migrate
           image: "{{ .Values.images.core.repository }}:{{ .Values.images.core.tag }}"
           imagePullPolicy: {{ .Values.images.core.pullPolicy }}
-          command: ["alembic", "upgrade", "head"]
+          command: ["alembic", "upgrade", "heads"]
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           envFrom:

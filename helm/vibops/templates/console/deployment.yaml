@@ -30,24 +30,30 @@ spec:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: {{ .Values.console.service.port }}
           env:
             - name: AGENT_URL
               value: {{ printf "http://%s-agent:%d" (include "vibops.fullname" .) (.Values.agent.service.port | int) | quote }}
             - name: CORE_URL
               value: {{ printf "http://%s-core:%d" (include "vibops.fullname" .) (.Values.core.service.port | int) | quote }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.console.resources | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /
-              port: 8080
+              port: {{ .Values.console.service.port }}
             initialDelaySeconds: 10
             periodSeconds: 20
           readinessProbe:
             httpGet:
               path: /
-              port: 8080
+              port: {{ .Values.console.service.port }}
             initialDelaySeconds: 5
             periodSeconds: 10
+      volumes:
+        - name: tmp
+          emptyDir: {}
 {{- end }}

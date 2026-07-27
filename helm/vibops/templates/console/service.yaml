@@ -14,6 +14,6 @@ spec:
     app.kubernetes.io/component: console
   ports:
     - port: {{ .Values.console.service.port }}
-      targetPort: 8080
+      targetPort: {{ .Values.console.service.port }}
       name: http
 {{- end }}

@@ -40,11 +40,13 @@ spec:
               value: /app/data/training
           resources:
             {{- toYaml .Values.agent.resources | nindent 12 }}
-          {{- if .Values.agent.persistence.enabled }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.agent.persistence.enabled }}
             - name: training-data
               mountPath: /app/data/training
-          {{- end }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -57,10 +59,12 @@ spec:
               port: 8001
             initialDelaySeconds: 5
             periodSeconds: 10
-      {{- if .Values.agent.persistence.enabled }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.agent.persistence.enabled }}
         - name: training-data
           persistentVolumeClaim:
             claimName: {{ include "vibops.fullname" . }}-agent-training
-      {{- end }}
+        {{- end }}
 {{- end }}

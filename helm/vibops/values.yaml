@@ -59,6 +59,9 @@ core:
     authUsername: "admin"
     authPasswordHash: ""   # vide = auth désactivée
     databaseUrl: ""        # auto-généré si postgresql.enabled
+    redisUrl: ""           # REQUIRED in production — e.g. redis://<redis-host>:6379/0
+    vaultKey: "change-me-vault-key"    # Fernet key — python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    internalApiKey: "change-me-internal-key"  # service-to-service auth — python -c "import secrets; print(secrets.token_hex(32))"
     # Licence VibOps — laisser vide pour trial 14 jours
     # Obtenir une clé : contacter david@vibops.ai
     # La clé est un JWT RS256 signé par VibOps. Aucun secret partagé requis côté client.
@@ -133,7 +136,7 @@ console:
 
   service:
     type: ClusterIP
-    port: 8080
+    port: 8003
 
 # ── Ingress ───────────────────────────────────────────────────────────────────
 ingress:
