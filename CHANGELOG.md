@@ -9,6 +9,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.23.1] — 2026-07-28
+
+### Fixed
+- **CRITICAL: release-images.yml** — connect image pointed to `gateway/Dockerfile` instead of `connect/Dockerfile`; clients received wrong image
+- **CRITICAL: Helm core secret** — missing `VAULT_KEY`, `REDIS_URL`, `INTERNAL_API_KEY`; pod would crash on production startup (`sys.exit(1)`)
+- **CRITICAL: Console port mismatch** — Helm templates used 8080, Dockerfile uses 8003; probes failed, pod killed in loop
+- **Helm: Alembic initContainer** — `upgrade head` → `upgrade heads` (safety for multi-head scenarios)
+- **Helm: emptyDir /tmp** on agent + console deployments (required for `readOnlyRootFilesystem`)
+- **Helm: console liveness/readiness probes** added (was the only deployment without them)
+- **connect/Dockerfile** — multi-stage build + non-root user `vibops` (image deployed at client sites)
+- **core/Dockerfile** — multi-stage build; removed docker CLI, kind, helm, gcc, git from runtime image
+- **CI: lint now blocking** — removed `continue-on-error`; 187+150+5 ruff errors fixed across core/agent/connectors
+- **CI: extended lint** to connectors/ and gateway/; added test-agent job; OTEL disabled in test jobs
+- **CI: pytest-cov** `--fail-under=50` on core + connectors; pip-audit added for llm-proxy
+- **CI: publish-install** now gates on all tests + lint + security-scan (was only test-core + openapi)
+- **Alembic** — 13 missing model imports in env.py; diverged heads merged
+- **Versioning** — 53 annotated git tags aligned 1:1 with CHANGELOG; pre-release dates corrected to actual commit dates; 5 pyproject.toml synced to 0.23.0; llm-proxy deps pinned
+- **Removed** legacy `charts/vibops/` (desynchronized, never used) and `docs/node_modules/` (30MB Playwright)
+- **.dockerignore** created at repo root
+
+---
+
 ## [0.23.0] — 2026-07-20
 
 ### Added
