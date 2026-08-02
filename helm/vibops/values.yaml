@@ -74,6 +74,17 @@ core:
     secretName: ""          # nom du secret K8s contenant la clé "config"
     mountPath: /root/.kube  # chemin de montage dans le pod
 
+# ── Worker (Celery) ──────────────────────────────────────────────────────────
+worker:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1"
+      memory: "512Mi"
+
 # ── Agent ─────────────────────────────────────────────────────────────────────
 agent:
   enabled: true

@@ -31,6 +31,10 @@ spec:
       ports:
         - port: 5432
           protocol: TCP
+    # Redis (Celery broker + backend)
+    - ports:
+        - port: 6379
+          protocol: TCP
     # DNS resolution
     - to: []
       ports:
