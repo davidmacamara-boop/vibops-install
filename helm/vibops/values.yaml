@@ -72,7 +72,7 @@ core:
   #   --from-file=config=$HOME/.kube/config -n vibops
   kubeconfig:
     secretName: ""          # nom du secret K8s contenant la clé "config"
-    mountPath: /root/.kube  # chemin de montage dans le pod
+    mountPath: /home/vibops/.kube  # chemin de montage dans le pod
 
 # ── Worker (Celery) ──────────────────────────────────────────────────────────
 worker:

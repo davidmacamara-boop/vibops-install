@@ -77,7 +77,7 @@ core:
 
   kubeconfig:
     secretName: ""   # kubectl create secret generic vibops-kubeconfig --from-file=config=~/.kube/config
-    mountPath: /root/.kube
+    mountPath: /home/vibops/.kube
 
 # ── Agent (LLM service) ───────────────────────────────────────────────────────
 agent:
