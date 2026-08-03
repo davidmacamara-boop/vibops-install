@@ -426,6 +426,11 @@ _Last updated: 2026-06-20 · v0.20.1-security_
 - [ ] MCP server Helm chart for self-hosted deployment
 - [ ] SDK: typed Python client generated from OpenAPI spec
 
+### Console frontend architecture
+- [ ] Split `index.html` (8000 lines) into Jinja2 partials — one per tab (wizard, fleet, finops, agents, settings)
+- [ ] Split `vibops.js` (4500 lines) into JS modules (wizard.js, fleet.js, finops.js, api.js) — concatenated at build
+- [ ] This intermediate step maps 1:1 to future React components — enables incremental migration without big-bang rewrite
+
 ---
 
 ## Out of scope for now
