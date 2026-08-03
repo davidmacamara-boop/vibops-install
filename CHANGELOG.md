@@ -9,6 +9,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.24.0] — 2026-08-03
+
+### Added
+- **Onboarding wizard** — 5-step guided setup for new instances:
+  1. LLM provider configuration (Anthropic Claude / OpenAI-compatible / Ollama) with API key storage
+  2. Infrastructure type selection (Kubernetes / Virtual Machines / Both)
+  3. Infrastructure connection (K8s gateway registration + helm install command, or hypervisor setup for Proxmox VE / Xen Orchestra / VMware vSphere)
+  4. Notification channel setup (Slack webhook, optional)
+  5. Summary + "Start using VibOps"
+- Wizard triggers automatically on first login when no gateways are registered
+- Stepper UI with animated progress bar, pulsing active step indicator, labeled steps
+- Skip buttons on all optional steps; Back navigation on steps 2-4
+- Pill-shaped provider and hypervisor selection buttons with glow effect
+- Note: "You can add more clusters and hypervisors later in Settings"
+- Console secret upsert (delete + recreate) to handle re-runs gracefully
+
+### Fixed
+- Console Dockerfile: `mkdir /data` with correct ownership for non-root user
+- Console `main.py`: ETag header for cache busting on HTML responses
+- Wizard: `credentials: 'same-origin'` on all fetch calls (CSRF fix)
+- Wizard: use `/api/secrets` service route instead of `/api/v1/secrets` (avoids user-auth 500)
+- Wizard: use `/api/notifications/channels` (correct console proxy path)
+- Wizard: gateway heartbeat poller uses list endpoint filtered by ID (avoids 405 on GET by ID)
+- Password modal moved inside `authenticated && !onboarding` template (fixes Alpine `pwdSaving` error)
+
+---
+
 ## [0.23.1] — 2026-07-28
 
 ### Fixed
