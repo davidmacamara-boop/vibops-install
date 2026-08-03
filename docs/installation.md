@@ -375,39 +375,52 @@ automatically, including secret generation, Helm install and rollout verificatio
 
 Open the console URL in your browser.
 
-**If auth is disabled** (empty `AUTH_PASSWORD_HASH`): the dashboard loads directly. Skip to the wizard.
+**First-run setup**: if no admin account exists, the console shows a setup form. Enter your organization name, admin email, and password to bootstrap the instance.
 
-**If auth is enabled**: log in with the username and password from the bootstrap step.
+**Returning users**: log in with your credentials.
 
 ### Onboarding wizard
 
-On first access, the onboarding wizard appears automatically. It guides you through:
+On first login, if no infrastructure is connected yet, a 5-step onboarding wizard appears automatically.
 
-**Step 1 — Register your first gateway**
+**Step 1 — AI Provider**
 
-The gateway is the VibOps Connect worker that runs inside (or alongside) your GPU cluster.
-It polls the Core for jobs, auto-discovers available kubeconfig contexts, and reports cluster metrics in every heartbeat.
+Configure which LLM powers the VibOps agent:
 
-1. Enter a name for the gateway (e.g. `prod-gpu-cluster`, `h100-pool-eu`) and click **Register**
-2. Copy the token shown — **it is displayed only once**
-3. Copy the pre-filled Helm (or Docker) deploy command and run it on the target cluster
-4. The wizard shows **"Waiting for worker to connect…"** — it advances automatically once the first heartbeat arrives
-5. The wizard confirms "Gateway connected ✓" and lists the discovered clusters
+- **Anthropic (Claude)** — enter your Anthropic API key (`sk-ant-...`)
+- **OpenAI-compatible** — works with OpenAI, vLLM, Mistral, Groq, Together, DeepSeek, or any OpenAI-compatible API. Enter API key + optional base URL for on-prem endpoints
+- **Ollama (local)** — enter the Ollama base URL (default: `http://ollama:11434`)
 
-**Step 2 — Connect your Git provider (optional)**
+The wizard stores the configuration as VibOps secrets. Restart the agent service to apply changes.
 
-Link your GitHub or GitLab repository to enable:
-- Pipeline triggers on PR merge / MR merge
-- Deployment rollback from commit history
-- Webhook-based automation
+**Step 2 — Infrastructure type**
 
-Set `GIT_PROVIDER=github` or `GIT_PROVIDER=gitlab` in `.env`, then add your Personal Access Token in `GIT_TOKEN`.
+Choose what VibOps will manage:
 
-Click **Skip for now** if you want to set this up later (Admin → Integrations).
+- **Kubernetes Cluster** — connect via VibOps Connect gateway
+- **Virtual Machines** — Proxmox VE, Xen Orchestra, or VMware vSphere
+- **Both** — Kubernetes clusters and virtual machines
 
-**Step 3 — Done**
+You can add more clusters and hypervisors later in Settings.
 
-Click **Go to dashboard**. The main interface loads.
+**Step 3 — Connect infrastructure**
+
+Depending on your choice:
+
+- **Kubernetes**: enter a gateway name → click Register → copy the token (shown once) and the Helm install command → run it on your cluster → the wizard polls for the gateway heartbeat
+- **Hypervisor**: select the type (Proxmox VE / Xen Orchestra / VMware vSphere) → enter the API URL and credentials → click Register
+
+Use the **Skip** button to proceed without waiting for a heartbeat (useful for remote clusters that take longer to connect).
+
+**Step 4 — Notifications (optional)**
+
+Enter a Slack webhook URL to receive GPU alerts, anomaly notifications, and approval requests. Email notifications can be configured later in Settings with SMTP details.
+
+Click **Skip** if you want to set this up later.
+
+**Step 5 — Ready**
+
+A summary of what was configured is shown. Click **Start using VibOps** to enter the dashboard.
 
 ---
 

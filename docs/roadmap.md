@@ -403,7 +403,7 @@ _Last updated: 2026-06-20 · v0.20.1-security_
 ### Onboarding
 - [ ] Step 3 GitHub: functional PR webhook setup (not just skip)
 - [ ] Post-onboarding checklist: Prometheus, alert rules, first team
-- [ ] UI wizard — pilot client provisioning in console (currently CLI only)
+- [x] UI wizard — 5-step onboarding in console (LLM provider, K8s/VM infra, notifications) ✓ v0.24.0
 
 ---
 
