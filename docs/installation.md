@@ -430,10 +430,11 @@ If you skipped the wizard or need to add more clusters, use one of these methods
 
 ### Method A — Via the console (recommended)
 
-1. Open the **Fleet** tab → click **"Add a gateway"** (or **⚙ Admin → Gateways → New Gateway**)
-2. Enter a name and click **Register**
-3. Copy the token — shown only once — and the pre-filled Helm deploy command
-4. Run the command on your GPU cluster; the wizard auto-detects the connection within 30 seconds
+1. Click **"+ Connect Gateway"** from the Fleet tab (or any tab) — a modal overlay opens
+2. Choose **Kubernetes Cluster** or **Virtual Machines**
+3. For K8s: enter a name, select environment, click **Register Gateway** — copy the token and Helm deploy command
+4. For VMs: select hypervisor type (Proxmox VE / Xen Orchestra / VMware vSphere), enter API URL and credentials, click **Connect Hypervisor**
+5. The modal polls for the gateway heartbeat — it auto-detects the connection within 30 seconds
 
 ### Method B — Via the setup script (local dev)
 

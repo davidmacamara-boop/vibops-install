@@ -9,6 +9,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.24.1] — 2026-08-04
+
+### Added
+- **Global Connect Infrastructure modal** — overlay accessible from any tab (Fleet, Admin, checklist). Two flows: Kubernetes gateway (name + env → token + Helm command + heartbeat poll) and Virtual Machines (Proxmox VE / Xen Orchestra / VMware vSphere + credentials). Replaces the old navigation to Admin → Clusters.
+- **"+ Connect Gateway" button** in Fleet sub-tabs opens modal in-place
+- **Post-onboarding checklist** in Fleet empty state — 5-step "Getting started" card (connect infra, monitoring, alert rules, invite team, ask agent)
+- **Branding proxy route** (`/api/v1/branding`) with default fallback — eliminates 404 on every page load
+- **462 English i18n keys** added — fixes raw key names (`settings_title`, `status_offline`, etc.)
+
+### Fixed
+- Overlay opacity at 50% for modal backdrop (was opaque, then 70%)
+- Modal card background hardcoded to `#161b22` (was transparent via CSS variable)
+- Approvals polling stops after 3 consecutive errors (was infinite 500 spam)
+- Connect modal uses `cm*`-prefixed variables in parent Alpine scope (fixes scope conflicts)
+- Removed debug `console.log` / `console.error` statements
+- `x-cloak` on modal prevents flash on page load
+
+### Tests
+- 4 new tests for Connect Infrastructure modal (K8s fields, VM fields, JS methods, HTML presence)
+
+---
+
 ## [0.24.0] — 2026-08-03
 
 ### Added
