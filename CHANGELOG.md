@@ -9,6 +9,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.25.0] — 2026-08-04
+
+### Added
+- **18 new VM actions** across all 3 hypervisor connectors (Proxmox, XO, vSphere):
+  - `delete_vm` — permanent deletion with dry-run preview + HITL confirmation
+  - `resize_vm` — change vCPU/RAM (VM must be stopped)
+  - `clone_vm` — full clone with HITL confirmation
+  - `list_snapshots` — list all VM snapshots
+  - `restore_snapshot` — rollback to snapshot with HITL confirmation
+  - `delete_snapshot` — remove snapshot with HITL confirmation
+- **VM FinOps dashboard** — full parity with GPU:
+  - VM Cost Attribution panel with KPI bar + per-VM cost table
+  - Configurable VM rates per hypervisor (CSV import + inline form + markup %)
+  - Stopped VMs waste detection with expandable detail + Diagnose button
+  - Budget bar unified GPU + VM with breakdown legend
+  - Spend trend chart: stacked GPU (indigo) + VM (green) bars
+  - "Resource Waste" section: idle GPUs + stopped VMs with per-resource $/day
+- **Global Connect Infrastructure modal** — overlay from any tab for K8s gateway + VM hypervisor connection
+- **Post-onboarding checklist** in Fleet empty state (5 steps)
+- VM rate CRUD: `GET/POST /pricing/vm-rates` + `POST /pricing/vm-rates/import`
+- Alembic migration: 3 VM rate columns on `cluster_rates`
+- 462 English i18n keys added
+
+### Fixed
+- Budget + spend calculations include VM costs
+- Console branding proxy (eliminates 404)
+- Approvals polling stops after 3 errors
+- GPU/VM Diagnose buttons harmonized (pill style)
+
+---
+
 ## [0.24.1] — 2026-08-04
 
 ### Added
