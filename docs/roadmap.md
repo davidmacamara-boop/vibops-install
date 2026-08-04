@@ -330,6 +330,7 @@ _Last updated: 2026-06-20 · v0.20.1-security_
 - ~~[ ] `accelerator_detect_waste` — time-series mode: sustained underutilisation over N hours (not just snapshot)~~ ✓ Sprint 15
 - ~~[ ] Chargeback generation — automated monthly Celery Beat task (currently admin-triggered)~~ ✓ Sprint 15
 - [ ] Cloud pricing API integration — live AWS/GCP/Azure GPU rates (currently manual ClusterRate)
+- [ ] VM cost history — monthly snapshots in ChargebackReport for 12-month spend trend parity with GPU
 - [ ] Currency conversion — multi-currency support (currently USD only)
 - [x] White-label routing — custom domains per CSP via `white_label_domain` — `GET /branding` resolves CSP brand from Host header ✓ Sprint 7
 - [ ] FinOps UI — consent management + dataset export controls in console (ADR 0018 — Decision 5)
