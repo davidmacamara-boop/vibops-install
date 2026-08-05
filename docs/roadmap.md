@@ -330,6 +330,7 @@ _Last updated: 2026-06-20 · v0.20.1-security_
 - ~~[ ] `accelerator_detect_waste` — time-series mode: sustained underutilisation over N hours (not just snapshot)~~ ✓ Sprint 15
 - ~~[ ] Chargeback generation — automated monthly Celery Beat task (currently admin-triggered)~~ ✓ Sprint 15
 - [ ] **GPU passthrough correlation (MOAT)** — detect PCIe passthrough in VM config, match VM hostname ↔ K8s node, unified FinOps (VM + GPU cost on same asset). Fleet VM table: GPU column + drill-down drawer (hypervisor → K8s → workload → combined cost). 2-3 sprints.
+- [ ] **NVIDIA vGPU (GRID) support** — collect vGPU metrics from hypervisor host (nvidia-smi vgpu -q), correlate vGPU ↔ VM, show profil/utilization per VM, include GRID licence cost in FinOps. 1 sprint.
 - [ ] Cloud pricing API integration — live AWS/GCP/Azure GPU rates (currently manual ClusterRate)
 - [ ] VM cost history — monthly snapshots in ChargebackReport for 12-month spend trend parity with GPU
 - [ ] Currency conversion — multi-currency support (currently USD only)
