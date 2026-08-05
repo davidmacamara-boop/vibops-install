@@ -352,6 +352,7 @@ _Last updated: 2026-06-20 · v0.20.1-security_
 
 ### Intelligence
 - ~~[ ] Proactive incident detection — agent monitors metrics autonomously between sessions~~ ✓ Sprint 4 (anomaly detection Beat task)
+- [ ] Datadog GPU polling — continuous DCGM metric collection via Datadog API (datadog_gpu → heartbeat feed), mapper Datadog metrics to VibOps format, enable FinOps for CSPs with existing Datadog deployments
 - [ ] Alert correlation across multiple services
 - [ ] Predictive GPU failure — temperature trends + DCGM error patterns → warn before incident
 - ~~[ ] L2 LLM-as-judge scanner — non-blocking, catches subtle prompt↔schema contradictions~~ ✓ Sprint 4 (is_auto_scanner on EvalRubric)
