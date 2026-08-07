@@ -9,6 +9,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.26.0] — 2026-08-06
+
+### Added
+- GPU passthrough correlation (MOAT) — VM ↔ K8s node ↔ GPU workload cost attribution chain
+- `node_name` column on Workload model with index; KubernetesWorkloadCollector populates from Prometheus Hostname
+- `nodes_detail` field on ClusterMetrics Pydantic model — per-node detail stored from gateway heartbeat
+- Cluster detail drawer in FinOps GPU Cost Attribution — click cluster to see metrics, nodes, workloads, pricing, cost breakdown
+- Fleet VMs table: Cluster, Status, GPU, K8s columns + click-to-drawer
+- GPU Cost Attribution table redesigned: Cluster / Gateway / Status / $/GPU/h / GPU / Nodes / vCPU / RAM / $/month
+- `GET /finops/vm-usage` joins running workloads by `node_name` — per-VM GPU workload detail
+- `GET /finops/workloads/live-cost` includes `node_name` in response
+- `seed_gpu_correlation_demo.py` — demo data script with H100/H200/B200/B300/L40S, 9 workloads, --keepalive flag
+- 18 VM action tool schemas added to agent LLM catalog (delete_vm, resize_vm, clone_vm, list/restore/delete_snapshot × Proxmox/XO/vSphere)
+- 14 new tests in `test_node_name_correlation.py`
+- Alembic migration `1186797b60e1` — create workloads table with node_name
+
+---
+
 ## [0.25.0] — 2026-08-04
 
 ### Added

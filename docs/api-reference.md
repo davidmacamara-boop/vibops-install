@@ -1,12 +1,12 @@
 # VibOps — API Reference
 
-_Last updated: 2026-05-30 · v0.17.5-sprint1_
+_Last updated: 2026-08-06 · v0.26.0_
 
 This document covers the **key endpoints** for integration and technical qualification. It is
 organized by functional domain, with curl examples for each operation.
 
 **Interactive reference (Swagger UI):** `https://<host>/docs`  
-**Machine-readable spec:** `docs/openapi.json` (OpenAPI 3.1 — 134 endpoints, auto-generated)  
+**Machine-readable spec:** `docs/openapi.json` (OpenAPI 3.1 — 187 endpoints, auto-generated)  
 **Full redoc:** `https://<host>/redoc`
 
 ---

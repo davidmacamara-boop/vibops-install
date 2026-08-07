@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-06-20 · v0.20.1-security_
+_Last updated: 2026-08-06 · v0.26.0_
 
 ## Principles
 
@@ -134,6 +134,8 @@ _Last updated: 2026-06-20 · v0.20.1-security_
 - [x] Console Workloads sub-tab in FinOps panel
 - [x] Console gateway form — gateway_type select, Slurm config section, prometheus_url field
 - [x] ADR 0024 — Slurm workload collector (transport hierarchy, GRES parsing, secret management)
+- [x] **Sprint A/B** — `node_name` on Workload model + KubernetesWorkloadCollector populates from Prometheus Hostname; vm-usage joins workloads by node_name ✓ v0.26.0
+- [ ] **Sprint C** — `VmGpuCollector` — GPU workload discovery on VMs without K8s (bare-metal CUDA, rendering, VDI, HPC/Slurm). Lightweight agent or SSH-based nvidia-smi/DCGM polling from gateway. Covers the VM+GPU passthrough case where no K8s layer exists.
 
 ### Agent Catalog UX & Tool Policy (Sprint 1 — 2026-05-30)
 - [x] **OPS-A01** — Agent Catalog schema drawer: click any action to view its full input schema (description, typed parameters, required/optional fields, enum values)
@@ -329,7 +331,7 @@ _Last updated: 2026-06-20 · v0.20.1-security_
 ### FinOps maturity
 - ~~[ ] `accelerator_detect_waste` — time-series mode: sustained underutilisation over N hours (not just snapshot)~~ ✓ Sprint 15
 - ~~[ ] Chargeback generation — automated monthly Celery Beat task (currently admin-triggered)~~ ✓ Sprint 15
-- [ ] **GPU passthrough correlation (MOAT)** — detect PCIe passthrough in VM config, match VM hostname ↔ K8s node, unified FinOps (VM + GPU cost on same asset). Fleet VM table: GPU column + drill-down drawer (hypervisor → K8s → workload → combined cost). 2-3 sprints.
+- [x] **GPU passthrough correlation (MOAT)** — detect PCIe passthrough in VM config, match VM hostname ↔ K8s node, unified FinOps (VM + GPU cost on same asset). Fleet VM table: GPU column + drill-down drawer (hypervisor → K8s → workload → combined cost). ✓ v0.26.0
 - [ ] Cloud pricing API integration — live AWS/GCP/Azure GPU rates (currently manual ClusterRate)
 - [ ] VM cost history — monthly snapshots in ChargebackReport for 12-month spend trend parity with GPU
 - [ ] Currency conversion — multi-currency support (currently USD only)

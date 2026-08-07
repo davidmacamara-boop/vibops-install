@@ -1,6 +1,6 @@
 # VibOps — Demo Scenarios for CSP POC
 
-35 scenarios covering the full GitOps and HPC lifecycle — from multi-cluster discovery to ArgoCD auto-sync, cloud registry deploys, OpenShift, Slurm HPC training workflows, and unified GPU workload accounting (K8s + Slurm). Core scenarios (1–21) tested live against the local kind cluster (no cloud account required).
+38 scenarios covering the full GitOps, HPC, and VM/GPU lifecycle — from multi-cluster discovery to ArgoCD auto-sync, cloud registry deploys, OpenShift, Slurm HPC training workflows, and unified GPU workload accounting (K8s + Slurm). Core scenarios (1–21) tested live against the local kind cluster (no cloud account required).
 Each prompt is a natural sentence — type it directly in the console chat tab.
 
 **Automated validation:** run all scenarios end-to-end with:
@@ -1472,6 +1472,36 @@ Epoch 13/50: loss=1.791 | acc=0.641 | lr=2.3e-5
 **ROI:**
 - **Idle GPU identification time:** manual DCGM query + namespace correlation → 10 seconds automatic per cluster
 - **Action loop closed:** identify waste → agent scales down or time-slices → confirmed in same conversation
+
+---
+
+## Scenario 35 — VM lifecycle management (~30s, interactive)
+
+**Prompt:** *"List all VMs on proxmox-cluster-01, find any stopped VMs wasting resources, resize the stopped one to 2 vCPU and 4 GB RAM, then start it."*
+
+**Expected flow:** `proxmox_list_vms` → identify stopped VM → confirm resize → `proxmox_resize_vm(confirmed=true)` → `proxmox_start_vm`
+
+**What to show:** Agent identifies waste (stopped VM with 16 vCPU allocated), proposes rightsizing, asks confirmation, executes — full HITL loop.
+
+---
+
+## Scenario 36 — GPU passthrough correlation (~20s, read-only)
+
+**Prompt:** *"Show me the GPU workloads running on VM gpu-h100-01 in the apalacha cluster. What's the total cost?"*
+
+**Expected flow:** Agent calls `run_kubectl` or reads from the workloads table to show the correlation chain: VM gpu-h100-01 (8× H100 passthrough) → K8s node gpu-h100-01 → llama3.1-70b-finetune workload (8 GPU, running 22h) → $528 estimated cost.
+
+**What to show:** The 3-layer correlation that no other tool provides — VM hardware → K8s orchestration → GPU workload cost.
+
+---
+
+## Scenario 37 — VM snapshot management (~30s, interactive)
+
+**Prompt:** *"Create a snapshot of gpu-node-02 before we do the CUDA driver update, call it pre-cuda-update."*
+
+**Expected flow:** `proxmox_create_snapshot(vmid=601, node=pve-gpu-1, name='pre-cuda-update')` → confirmation → success. Then: *"Now list snapshots for gpu-node-02."* → `proxmox_list_snapshots` → shows the new snapshot.
+
+**What to show:** Safe maintenance workflow on GPU VMs — snapshot before change, restore if needed.
 
 ---
 
