@@ -347,6 +347,7 @@ _Last updated: 2026-08-07 · v0.28.0_
 
 ### Platform
 - [x] Per-cluster role assignments — user X = operator on prod, readonly on dev
+- [ ] Multi-org admin UI — platform_admin role, create/list/manage organizations from console, reseller sub-org creation. Currently CLI-only (`make pilot-create-client`). Required when a CSP onboards multiple clients on the same instance.
 - [ ] Spot preemption enforcement — scheduling-level, not just metadata
 - [ ] Committed billing enforcement — reserved_1y/3y tiers beyond metadata
 - [ ] Vendor/accelerator_type explicit in payload schema (currently heuristic extraction)
