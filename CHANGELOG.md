@@ -9,6 +9,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.28.0] — 2026-08-07
+
+### Added
+- **Outscale OAPI** — 34 actions total (VM lifecycle: start/stop/reboot/create/delete/resize, snapshots: list/create/delete, Flexible GPU: create/delete/link/unlink, storage, billing). Fixed 11 actions missing from TOOL_CATALOG. 14 new tests (48 total).
+- **Generic VM routing** — 12 generic tools (list_vms, start_vm, stop_vm, etc.) auto-routed by `gateway_type` + `cluster_metrics.hypervisor`. User says "list my VMs" → agent resolves correct connector (Proxmox/XO/vSphere/Outscale).
+- `_resolve_vm_platform()` — reads gateway_type + hypervisor subtype for auto-dispatch
+- `_remap_vm_params()` — translates vm_ref → vmid/name/vm_id per platform
+- `format_gateways()` enriched — includes `gateway_type` in agent system prompt
+- 20 Outscale MCP tools (VM, GPU, snapshots, billing)
+
+---
+
+## [0.27.0] — 2026-08-07
+
+### Added
+- **Sprint C — VmGpuCollector** — GPU process discovery on VMs with GPU passthrough but no K8s layer (bare-metal CUDA, rendering, VDI, standalone inference)
+- `VmGpuCollector`: SSH + nvidia-smi CSV parser, one WorkloadSnapshot per CUDA process (`workload_type="vm_gpu_process"`)
+- `VmGpuConfig` dataclass: ssh_user, ssh_key_secret, ssh_port, nvidia_smi_timeout
+- `vm_gpu_config` JSONB column on Gateway model (migration `f747dc1218d7`)
+- `workload_tasks` dispatch: hypervisor/hybrid gateways auto-discover non-K8s GPU VMs
+- `vm-usage` endpoint: correlate workloads to VMs by name (not just k8s_node)
+- VM drawer shows "Process" + PID for `vm_gpu_process` workloads
+- 13 new tests
+
+---
+
 ## [0.26.0] — 2026-08-06
 
 ### Added

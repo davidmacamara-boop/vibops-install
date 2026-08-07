@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-08-06 · v0.26.0_
+_Last updated: 2026-08-07 · v0.28.0_
 
 ## Principles
 
@@ -135,7 +135,7 @@ _Last updated: 2026-08-06 · v0.26.0_
 - [x] Console gateway form — gateway_type select, Slurm config section, prometheus_url field
 - [x] ADR 0024 — Slurm workload collector (transport hierarchy, GRES parsing, secret management)
 - [x] **Sprint A/B** — `node_name` on Workload model + KubernetesWorkloadCollector populates from Prometheus Hostname; vm-usage joins workloads by node_name ✓ v0.26.0
-- [ ] **Sprint C** — `VmGpuCollector` — GPU workload discovery on VMs without K8s (bare-metal CUDA, rendering, VDI, HPC/Slurm). Lightweight agent or SSH-based nvidia-smi/DCGM polling from gateway. Covers the VM+GPU passthrough case where no K8s layer exists.
+- [x] **Sprint C** — `VmGpuCollector` — GPU workload discovery on VMs without K8s (bare-metal CUDA, rendering, VDI, HPC/Slurm). SSH + nvidia-smi polling, `vm_gpu_config` on Gateway model. ✓ v0.27.0
 
 ### Agent Catalog UX & Tool Policy (Sprint 1 — 2026-05-30)
 - [x] **OPS-A01** — Agent Catalog schema drawer: click any action to view its full input schema (description, typed parameters, required/optional fields, enum values)
