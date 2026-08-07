@@ -1,6 +1,6 @@
 # VibOps — Upgrade & Migration Runbook
 
-_Last updated: 2026-05-05 · v0.15.0_
+_Last updated: 2026-08-07 · v0.28.0_
 
 ---
 
