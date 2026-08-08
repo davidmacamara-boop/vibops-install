@@ -333,8 +333,8 @@ _Last updated: 2026-08-07 · v0.28.0_
 - ~~[ ] Chargeback generation — automated monthly Celery Beat task (currently admin-triggered)~~ ✓ Sprint 15
 - [x] **GPU passthrough correlation (MOAT)** — detect PCIe passthrough in VM config, match VM hostname ↔ K8s node, unified FinOps (VM + GPU cost on same asset). Fleet VM table: GPU column + drill-down drawer (hypervisor → K8s → workload → combined cost). ✓ v0.26.0
 - [ ] Cloud pricing API integration — live AWS/GCP/Azure GPU rates (currently manual ClusterRate)
-- [ ] VM cost history — monthly snapshots in ChargebackReport for 12-month spend trend parity with GPU
-- [ ] Currency conversion — multi-currency support (currently USD only)
+- [x] VM cost history — VmCostSnapshot table, 12-month spend trend parity with GPU ✓ v0.29.0
+- [x] Currency conversion — EUR/USD dynamic symbol from budget.currency ✓ v0.29.0
 - [x] White-label routing — custom domains per CSP via `white_label_domain` — `GET /branding` resolves CSP brand from Host header ✓ Sprint 7
 - [ ] FinOps UI — consent management + dataset export controls in console (ADR 0018 — Decision 5)
 - ~~[ ] Budget enforcement on pre-Sprint 9 jobs — sum Job records instead of ChargebackReport~~ ✓ Sprint 14
