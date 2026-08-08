@@ -81,4 +81,12 @@ rbac:
   # Droits étendus (lecture pods, nodes, deployments, metrics)
   clusterRole: true
 
+# ── mTLS (mutual TLS) ──────────────────────────────────────────────────────────
+mtls:
+  enabled: false
+  # K8s Secret containing tls.crt and tls.key for client certificate auth
+  clientCertSecret: ""
+  # K8s Secret containing ca.crt for verifying core's server certificate
+  caSecret: ""
+
 env: {}
