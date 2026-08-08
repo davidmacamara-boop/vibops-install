@@ -361,8 +361,8 @@ _Last updated: 2026-08-07 · v0.28.0_
 - ~~[ ] L2 LLM-as-judge scanner — non-blocking, catches subtle prompt↔schema contradictions~~ ✓ Sprint 4 (is_auto_scanner on EvalRubric)
 
 ### Connect Gateway
-- [x] Gateway capability discovery — gateway reports connector actions at each ping, core stores and exposes via API ✓ v0.29.1
-- [x] mTLS option between gateway and core — client cert via MTLS_CLIENT_CERT/KEY/CA_BUNDLE env vars + Helm values ✓ v0.29.1
+- [ ] Gateway capability discovery endpoint — declares which connectors it exposes
+- [ ] mTLS option between gateway and core
 
 ### Image build & CI connector
 - [x] `docker_build` — build a Docker image from a local context / cloned repo (600s timeout, layer-by-layer log streaming)
