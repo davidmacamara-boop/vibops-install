@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # VibOps Connect — values.yaml
-# Helm chart pour le déploiement de l'agent connecteur sur le cluster CSP client.
+# Helm chart for the VibOps Connect gateway deployed on client infrastructure.
 # ─────────────────────────────────────────────────────────────────────────────
 
 global:
@@ -9,39 +9,39 @@ global:
 
 image:
   repository: ghcr.io/davidmacamara-boop/vibops-connect
-  tag: "0.10.0"
+  tag: "0.30.0"
   pullPolicy: IfNotPresent
 
-# ── Identité du gateway ────────────────────────────────────────────────────────
+# ── Gateway identity ──────────────────────────────────────────────────────────
 gateway:
-  # Nom unique du gateway (affiché dans VibOps, ex: "client-acme-prod")
+  # Unique name (displayed in VibOps console, e.g. "client-acme-prod")
   name: ""
-  # Cluster associé (ex: "gpu-cluster-west")
+  # Associated cluster name (e.g. "gpu-cluster-west")
   cluster: ""
-  # Organisation (identifiant unique fourni par VibOps)
+  # Organization ID (provided by VibOps)
   orgId: ""
 
-# ── Connexion à l'API VibOps centrale ─────────────────────────────────────────
+# ── Connection to VibOps Core API ─────────────────────────────────────────────
 vibops:
-  # URL de l'API core VibOps (ex: https://vibops.example.com)
+  # URL of the core API (e.g. https://vibops.example.com)
   coreUrl: ""
-  # Token d'authentification (généré depuis la console VibOps)
+  # Authentication token (generated from the console)
   token: ""
-  # Nom d'un Secret existant contenant la clé "token"
+  # Existing K8s Secret containing the key "token"
   existingSecret: ""
 
-# ── Accès Kubernetes local ────────────────────────────────────────────────────
+# ── Local Kubernetes access ───────────────────────────────────────────────────
 kubeconfig:
-  # Secret contenant le kubeconfig local (clé "config")
-  # Si vide, utilise le ServiceAccount in-cluster
+  # Secret containing a kubeconfig (key "config")
+  # If empty, uses the in-cluster ServiceAccount
   secretName: ""
   mountPath: "/root/.kube"
 
-# ── Platform type ──────────────────────────────────────────────────────────────
-# "kubernetes" (default) or "hypervisor"
+# ── Platform type ─────────────────────────────────────────────────────────────
+# "kubernetes" (default), "hypervisor", "slurm", "hybrid"
 platformType: ""
 
-# ── Hypervisor config (when platformType=hypervisor) ──────────────────────────
+# ── Hypervisor config (platformType=hypervisor or hybrid) ─────────────────────
 # Proxmox VE
 proxmox:
   url: ""          # https://proxmox.example.com:8006
@@ -54,11 +54,43 @@ xenOrchestra:
   url: ""          # https://xo.example.com
   token: ""
 
-# ── Prometheus local ───────────────────────────────────────────────────────────
+# VMware vSphere (via pyVmomi — requires gateway image with pyVmomi)
+vsphere:
+  url: ""          # https://vcenter.example.com
+  user: ""
+  password: ""
+  verifySsl: "false"
+
+# ── Slurm config (platformType=slurm or hybrid) ──────────────────────────────
+slurm:
+  host: ""           # Slurm head node hostname
+  sshUser: "root"
+  sshPort: 22
+  sshKeySecret: ""   # K8s Secret name containing SSH private key
+  restUrl: ""        # Optional slurmrestd URL
+
+# ── Prometheus local ──────────────────────────────────────────────────────────
 prometheus:
   url: "http://prometheus-operated:9090"
 
-# ── Ressources ────────────────────────────────────────────────────────────────
+# ── Network Discovery ────────────────────────────────────────────────────────
+networkScan:
+  # Scan the local subnet at boot for infrastructure services
+  enabled: true
+  # Subnet to scan (auto-detected from gateway IP if empty)
+  subnet: ""
+  # Timeout per port probe in milliseconds
+  timeoutMs: 500
+
+# ── mTLS (mutual TLS) ────────────────────────────────────────────────────────
+mtls:
+  enabled: false
+  # K8s Secret containing tls.crt and tls.key for client certificate auth
+  clientCertSecret: ""
+  # K8s Secret containing ca.crt for verifying core's server certificate
+  caSecret: ""
+
+# ── Resources ─────────────────────────────────────────────────────────────────
 replicaCount: 1
 
 resources:
@@ -69,24 +101,16 @@ resources:
     cpu: "500m"
     memory: "512Mi"
 
-# ── ServiceAccount ─────────────────────────────────────────────────────────────
+# ── ServiceAccount ────────────────────────────────────────────────────────────
 serviceAccount:
   create: true
   name: ""
   annotations: {}
 
-# ── RBAC — accès cluster pour kubectl/metrics ─────────────────────────────────
+# ── RBAC ──────────────────────────────────────────────────────────────────────
 rbac:
   create: true
-  # Droits étendus (lecture pods, nodes, deployments, metrics)
   clusterRole: true
 
-# ── mTLS (mutual TLS) ──────────────────────────────────────────────────────────
-mtls:
-  enabled: false
-  # K8s Secret containing tls.crt and tls.key for client certificate auth
-  clientCertSecret: ""
-  # K8s Secret containing ca.crt for verifying core's server certificate
-  caSecret: ""
-
+# ── Extra environment variables ───────────────────────────────────────────────
 env: {}
