@@ -1399,7 +1399,7 @@ Both flags can be active simultaneously: the agent presents the dry-run and wait
 
 **The table**
 
-The Tool policy table lists all 195+ actions across every registered connector. Each row shows:
+The Tool policy table lists all 258 actions across every registered connector. Each row shows:
 
 | Column | Description |
 |--------|-------------|
