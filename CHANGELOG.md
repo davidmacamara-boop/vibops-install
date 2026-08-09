@@ -9,6 +9,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.31.0] — 2026-08-09
+
+### Added
+- Live GPU utilization % column in Fleet (Clusters + VMs) with color coding
+- Unified GPU anomaly detection pipeline — VM + K8s + Datadog in same pipeline
+- Unified VM drawer (5 layers: Hypervisor, GPU, K8s, Workloads, Cost) accessible from any tab
+- Dashboard Apps panel — live K8s apps + VMs + Ollama models with pulse dots
+- Anomaly closed-loop remediation: Diagnose & Fix → agent verifies metrics before resolving
+- TCO Calculator UI (Manual / On-prem / Cloud) with live rate preview
+- Network Discovery content-based (Proxmox, K8s, vSphere, Prometheus, DCGM, Slurm, Grafana)
+- Network rescan via UI button (pull-based via ping response flag)
+- Datadog GPU Polling — Celery beat task, virtual gateway, Connect wizard flow
+- Connect wizard: Datadog under Monitoring, AWS/GCP/Azure under Cloud Providers
+- Organization settings panel in Admin (name, contact email)
+- `POST /gateways/{id}/scan` — request network rescan
+- `GET /gateways/gpu-utilization/live` — latest GPU % per cluster
+- Cluster Alert Rules + VM Alert Rules with GPU coverage
+- 30 connectors (cerebras added)
+
+### Fixed
+- Console proxy org isolation: 8 critical routes converted from `_svc_headers()` to `_proxy_to_core()`
+- 196 lines dead HTML removed (hidden sidebar + legacy VM drawer)
+- Gateway wording → Connection/Connector across all UI
+- Pulse-dot animation (opacity-only, no green box-shadow bleed)
+- Alpine.js null guards on k8sDetailTarget expressions
+- Pending job icon visibility (◌ with fg-muted)
+
+---
+
+## [0.30.0] — 2026-08-08
+
+### Added
+- TCO Calculator API — `RateUpsert` with `formula_type` (on_prem/cloud), auto-computed rate
+- Network Discovery — gateway scans /24 subnet at boot, content-based service identification
+- Datadog GPU Polling — `poll_datadog_gateways()` Celery beat task
+- VmCostSnapshot model — 12-month VM spend trend parity with GPU
+- Currency support — EUR/USD dynamic symbol from `budget.currency`
+- `discovered_services` + `rescan_requested` columns on Gateway model
+- Helm chart: networkScan, Slurm, vSphere sections in values.yaml
+
+---
+
+## [0.29.0] — 2026-08-08
+
+### Added
+- VM cost history — `VmCostSnapshot` table, 12-month spend trend
+- Currency conversion — EUR/USD dynamic from `budget.currency`
+- Onboarding complete: email notifications, post-onboarding checklist, Slurm + Outscale Connect flows
+- Gateway capability discovery — connectors reported at each ping
+- mTLS support — client cert via `MTLS_CLIENT_CERT/KEY/CA_BUNDLE`
+- Connect Infrastructure wizard refonte (Infrastructure / Cloud Providers / Monitoring)
+- Admin: Organization settings, Agent Tools fix, wording cleanup
+
+---
+
 ## [0.28.0] — 2026-08-07
 
 ### Added
