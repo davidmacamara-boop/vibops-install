@@ -350,12 +350,12 @@ _Last updated: 2026-08-07 · v0.31.0_
 - [ ] Multi-org admin UI — platform_admin role, create/list/manage organizations from console, reseller sub-org creation. Currently CLI-only (`make pilot-create-client`). Required when a CSP onboards multiple clients on the same instance.
 - [ ] Spot preemption enforcement — scheduling-level, not just metadata
 - [ ] Committed billing enforcement — reserved_1y/3y tiers beyond metadata
-- [ ] Vendor/accelerator_type explicit in payload schema (currently heuristic extraction)
-- [ ] `scale_cluster` up/down split (ADR 0002 deferred)
+- [x] Vendor/accelerator_type heuristic detection from payload — 18 patterns, fallback when WorkloadSignature absent ✓ v0.31.1
+- [x] `scale_cluster` split into `scale_cluster_up` / `scale_cluster_down` — separate dry-run emphasis ✓ v0.31.1
 
 ### Intelligence
 - ~~[ ] Proactive incident detection — agent monitors metrics autonomously between sessions~~ ✓ Sprint 4 (anomaly detection Beat task)
-- [ ] Datadog GPU polling — continuous DCGM metric collection via Datadog API (datadog_gpu → heartbeat feed), mapper Datadog metrics to VibOps format, enable FinOps for CSPs with existing Datadog deployments
+- [x] Datadog GPU polling — Celery beat task, virtual gateway type "datadog", writes to gpu_metrics_history ✓ v0.30.0
 - [ ] Alert correlation across multiple services
 - [ ] Predictive GPU failure — temperature trends + DCGM error patterns → warn before incident
 - ~~[ ] L2 LLM-as-judge scanner — non-blocking, catches subtle prompt↔schema contradictions~~ ✓ Sprint 4 (is_auto_scanner on EvalRubric)
@@ -407,8 +407,8 @@ _Last updated: 2026-08-07 · v0.31.0_
 - [x] Scenario 29 — OpenShift deploy (`openshift_add_scc` + `deploy_webapp` + `openshift_create_route`)
 
 ### Onboarding
-- [ ] Step 3 GitHub: functional PR webhook setup (not just skip)
-- [ ] Post-onboarding checklist: Prometheus, alert rules, first team
+- [x] Step 3 GitHub: webhook setup UI in onboarding wizard (optional, copy URL + repo/branch/action config) ✓ v0.31.1
+- [x] Post-onboarding checklist: floating widget, 4 auto-tracking items, localStorage dismiss ✓ v0.24.1
 - [x] UI wizard — 5-step onboarding in console (LLM provider, K8s/VM infra, notifications) ✓ v0.24.0
 
 ---
