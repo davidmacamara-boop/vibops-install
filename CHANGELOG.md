@@ -9,6 +9,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.32.0] — 2026-08-15
+
+### Added
+- **NVIDIA Nemotron** as named LLM provider (`LLM_PROVIDER=nemotron`, NIM endpoint)
+- **Multi-org admin UI** — Customers tab for reseller orgs: create/list customer orgs, pricing rules, overrides (7 console proxy routes, 33 i18n keys EN+FR)
+- **Alert correlation engine** — groups related alerts by cluster/namespace/node within 5-min window, root cause heuristic, `GET /alerts/correlated` endpoint
+- **Predictive GPU failure** — temperature trend, sustained high utilization, utilization cliff detection; Celery beat task every 10 min; `GET /gpu/health-predictions` endpoint
+- **Vendor/accelerator heuristic** — `detect_vendor_from_payload()` infers GPU vendor from job payload (18 patterns: NVIDIA, AMD, Intel, AWS, GCP, Groq)
+- **GitHub webhook** in onboarding wizard step 3 (optional: webhook URL, repo, branch, action)
+- **Post-onboarding checklist** enhanced: 7 items (was 4) — added alert rules, GPU budget, first team
+- **scale_cluster split** into `scale_cluster_up` / `scale_cluster_down` with separate dry-run emphasis
+- **Safe MCP sync script** (`scripts/sync-mcp-repo.sh`) — prevents accidental push of proprietary code to public repo
+- +93 new tests (vendor detection 21, alert correlation 14, GPU health 14, reseller API 21, scale cluster 11, console proxy 12)
+
+### Changed
+- **Console refactoring** — HTML split: 9285 → 406 lines + 18 Jinja2 partials; JS split: 5305 → 38 lines + 13 modules (Object.assign)
+- **Positioning** — rebranded to "AI Infrastructure Engine" with tagline "From code to GPU in one conversation"
+- Console served via Jinja2Templates with config injection
+- Removed dead code: duplicate agents tab (82 lines)
+- Removed 5 stale CI workflows from vibops-mcp repo (release-images, deploy, e2e, chart-release, publish-install)
+
+### Fixed
+- 7 MEDIUM security fixes: 4 dict bodies → Pydantic models (agent_graph, agent_identities, tokens, sso), max_length on GatewayCreate/SubscriptionCreate/RuleCreate, HSTS header
+- Duplicate migration ID `a1b2c3d4e5f6` → `bdfa8c9eac42`
+- Unused imports in gpu_health_predictor (ruff F401)
+- index.html accidentally emptied in v0.31.0 — restored
+
+---
+
 ## [0.31.0] — 2026-08-09
 
 ### Added
