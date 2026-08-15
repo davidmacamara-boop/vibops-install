@@ -347,7 +347,7 @@ _Last updated: 2026-08-07 · v0.31.0_
 
 ### Platform
 - [x] Per-cluster role assignments — user X = operator on prod, readonly on dev
-- [ ] Multi-org admin UI — platform_admin role, create/list/manage organizations from console, reseller sub-org creation. Currently CLI-only (`make pilot-create-client`). Required when a CSP onboards multiple clients on the same instance.
+- [x] Multi-org admin UI — Customers tab for reseller orgs: create/list customer orgs, pricing rules, overrides, 7 proxy routes, 21 tests ✓ v0.31.2
 - [ ] Spot preemption enforcement — scheduling-level, not just metadata
 - [ ] Committed billing enforcement — reserved_1y/3y tiers beyond metadata
 - [x] Vendor/accelerator_type heuristic detection from payload — 18 patterns, fallback when WorkloadSignature absent ✓ v0.31.1
@@ -356,8 +356,8 @@ _Last updated: 2026-08-07 · v0.31.0_
 ### Intelligence
 - ~~[ ] Proactive incident detection — agent monitors metrics autonomously between sessions~~ ✓ Sprint 4 (anomaly detection Beat task)
 - [x] Datadog GPU polling — Celery beat task, virtual gateway type "datadog", writes to gpu_metrics_history ✓ v0.30.0
-- [ ] Alert correlation across multiple services
-- [ ] Predictive GPU failure — temperature trends + DCGM error patterns → warn before incident
+- [x] Alert correlation across multiple services — AlertCorrelator groups by cluster/namespace/node, 5-min window, root cause heuristic, 14 tests ✓ v0.31.2
+- [x] Predictive GPU failure — temperature trend, sustained high util, utilization cliff; Celery beat 10min; 14 tests ✓ v0.31.2
 - ~~[ ] L2 LLM-as-judge scanner — non-blocking, catches subtle prompt↔schema contradictions~~ ✓ Sprint 4 (is_auto_scanner on EvalRubric)
 
 ### Connect Gateway
