@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-08-07 · v0.32.0_
+_Last updated: 2026-08-17 · v0.33.0_
 
 ## Principles
 
@@ -434,9 +434,8 @@ _Last updated: 2026-08-07 · v0.32.0_
 - [ ] SDK: typed Python client generated from OpenAPI spec
 
 ### Console frontend architecture
-- [ ] Split `index.html` (8000 lines) into Jinja2 partials — one per tab (wizard, fleet, finops, agents, settings)
-- [ ] Split `vibops.js` (4500 lines) into JS modules (wizard.js, fleet.js, finops.js, api.js) — concatenated at build
-- [ ] This intermediate step maps 1:1 to future React components — enables incremental migration without big-bang rewrite
+- [x] Split `index.html` (9285 lines) into Jinja2 partials — 18 partials, skeleton 406 lines ✓ v0.32.0
+- [x] Split `vibops.js` (5305 lines) into 13 JS modules — Object.assign assembler (38 lines) ✓ v0.32.0
 
 ---
 
