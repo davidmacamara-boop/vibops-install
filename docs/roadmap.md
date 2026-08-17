@@ -86,6 +86,7 @@ _Last updated: 2026-08-17 · v0.33.0_
 - [x] GitOps workflow — `git_clone` → `git_patch_yaml` → `git_commit_push` → `git_create_pr`
 - [x] NIM workflow — `nim_list_catalog` → `nim_profiles` → GPU audit → `nim_deploy`
 - [x] Memory system — `save_memory` / `recall_memory`, proactive saving after incidents and decisions
+- [x] **Proactive agent engine** — 7 event-driven insight types, dashboard "Proaction Required" panel with click-to-chat, auto-acknowledge on remediation, toast notifications (ADR 0029) ✓ v0.33.0
 
 ### Observability
 - [x] Prometheus webhook integration (`POST /api/v1/webhook/grafana`)
@@ -355,6 +356,7 @@ _Last updated: 2026-08-17 · v0.33.0_
 
 ### Intelligence
 - ~~[ ] Proactive incident detection — agent monitors metrics autonomously between sessions~~ ✓ Sprint 4 (anomaly detection Beat task)
+- [x] **Proactive agent engine** — 7 event-driven insight types (stale_anomaly, gpu_health_warning, budget_warning, job_failure_pattern, deployment_health, capacity_forecast, cost_optimization); Celery Beat every 5 min; SQL-only (~5ms/run); deduplication + auto-acknowledge; dashboard "Proaction Required" panel with click-to-chat; toast notifications for critical insights; 31 tests ✓ v0.33.0
 - [x] Datadog GPU polling — Celery beat task, virtual gateway type "datadog", writes to gpu_metrics_history ✓ v0.30.0
 - [x] Alert correlation across multiple services — AlertCorrelator groups by cluster/namespace/node, 5-min window, root cause heuristic, 14 tests ✓ v0.31.2
 - [x] Predictive GPU failure — temperature trend, sustained high util, utilization cliff; Celery beat 10min; 14 tests ✓ v0.31.2

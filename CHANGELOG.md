@@ -12,6 +12,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.33.0] — 2026-08-17
 
 ### Added
+- **Proactive agent engine** — 7 event-driven insight types (`stale_anomaly`, `gpu_health_warning`, `budget_warning`, `job_failure_pattern`, `deployment_health`, `capacity_forecast`, `cost_optimization`) running every 5 min via Celery Beat; SQL-only checks (~5ms/run), deduplication (1h window), auto-acknowledge on agent remediation
+- **Dashboard "Proaction Required" panel** — click-to-chat recommendations that inject directly into the agent conversation; contextual data (daily burn, cluster names, error messages, waste estimates)
+- **Toast notification** for critical insights with 60s polling
+- **31 proactive agent tests**
 - **Agent modular prompt system** — system prompt assembled from 4 files: `system_prompt.md` + `routing_rules.md` + `response_templates.md` + 11 few-shot examples
 - **3 new behavioral rules**: Rule 17 (Planning — present numbered plan before multi-step actions), Rule 18 (Learn from corrections — save user corrections as memory), Rule 19 (Synthesize — lead with insight, not raw data)
 - **10 routing decision trees** — tool selection disambiguation for scale/deploy/monitor/cost/incident/secrets/git/helm confusions

@@ -1682,6 +1682,40 @@ POST /api/v1/anomalies/{id}/resolve  — manually resolve (org_admin)
 
 ---
 
+### Proaction Required
+
+The **Proaction Required** panel appears at the top of the Dashboard tab when VibOps detects infrastructure issues that need attention. Unlike anomaly detection (which monitors GPU metrics), the proactive engine runs 7 event-driven checks every 5 minutes across anomalies, budgets, jobs, deployments, GPU health, and cost optimization.
+
+#### Insight types
+
+| Type | What it detects |
+|------|----------------|
+| `stale_anomaly` | Open anomalies unresolved for more than 1 hour |
+| `gpu_health_warning` | GPU temperature or utilization health warnings |
+| `budget_warning` | Budget > 90% consumed, with exhaustion date forecast |
+| `job_failure_pattern` | 3+ failures on the same action within 30 minutes |
+| `deployment_health` | Pods restarting 3+ times in 1 hour |
+| `capacity_forecast` | GPU utilization projected to hit 90% within 14 days |
+| `cost_optimization` | Clusters averaging < 30% utilization over 24 hours, with waste estimate |
+
+#### Click-to-chat recommendations
+
+Each insight includes a contextual recommendation with real data (daily burn rate, cluster names, error messages, waste estimates). Click the recommendation text to inject it directly into the agent chat — the agent will act on it immediately.
+
+#### Toast notifications
+
+Critical insights trigger a toast notification in the bottom-right corner. Notifications poll every 60 seconds.
+
+#### Auto-acknowledge
+
+When the agent resolves the underlying issue (e.g. resolves a stale anomaly, scales a deployment, adjusts a budget), the corresponding insight is automatically marked as acknowledged. No manual dismissal is required.
+
+#### Deduplication
+
+Insights are deduplicated within a 1-hour window — the same check will not produce a duplicate insight if one already exists for the same resource.
+
+---
+
 ### Live Workload Cost Attribution
 
 The **Live Cost** panel in the FinOps → Workloads tab shows real-time cost attribution for every currently running workload.
