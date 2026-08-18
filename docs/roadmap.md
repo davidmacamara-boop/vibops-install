@@ -437,8 +437,35 @@ _Last updated: 2026-08-18 · v0.36.0_
 - [ ] MCP server Helm chart for self-hosted deployment
 - [x] SDK: typed Python client (`sdk/`) — 9 resource namespaces, async-first with sync wrapper, auto-retry, typed exceptions, MIT licensed, 19 tests ✓ v0.35.0
 
-### Agent Architecture
-- [ ] Multi-agent graph — orchestrator + capteurs communicate via graph (LangGraph-style). Triggers: capteurs need inter-agent coordination, ops agent context window saturated (224+ tools), parallel multi-workload reasoning. Pre-requisite: ADR 0032.
+### Agent Fleet (custom graph, zero external dependencies)
+
+**Shipped (4 agents):**
+- [x] Ops Orchestrator — 224 tools, 19 rules, 7 guardrails, conversational ✓ v0.1
+- [x] Proactive Sensor — 7 event-driven insight types, 5-min Celery beat ✓ v0.33.0
+- [x] Security Scanner — 8 DAST pentest checks, weekly + on-demand ✓ v0.34.0
+- [x] Compliance Verifier — 8 SOC 2 runtime checks, daily ✓ v0.35.0
+
+**Phase 2 — Optimization agents:**
+- [ ] Cost Optimizer — continuous FinOps recommendations (placement, sizing, spot vs reserved, idle scale-down)
+- [ ] Capacity Planner — GPU demand forecasting at 30/60/90 days, procurement alerts
+- [ ] Vendor Arbitrator — real-time cost/performance comparison across NVIDIA, AMD, Intel, Cerebras; optimal placement recommendations
+
+**Phase 3 — Autonomous operations:**
+- [ ] Incident Responder — auto-remediate P3/P4 incidents without human intervention (diagnose → fix → verify → resolve)
+- [ ] Release Manager — canary deploy validation, auto-rollback on metric regression, progressive rollout
+- [ ] Drift Detector — compare GitOps desired state vs actual cluster state, alert and auto-reconcile
+- [ ] SLA Monitor — continuous SLO verification, auto-escalation on breach, trend-based early warning
+
+**Phase 4 — Governance & intelligence:**
+- [ ] Data Guardian — RGPD enforcement (consent verification, retention policies, anonymization triggers, right-to-erasure automation)
+- [ ] Chaos Agent — controlled fault injection to test resilience (GPU failure simulation, network partition, OOM scenarios)
+- [ ] Knowledge Agent — learns from past incidents and recommendations, enriches future diagnostics with historical patterns
+- [ ] Onboarding Assistant — conversational wizard for new clients (replaces HTML wizard with AI-guided setup)
+
+**Infrastructure:**
+- [ ] Agent graph dispatcher — custom state machine in DB (`agent_tasks` table) + Celery routing. No LangGraph/CrewAI dependency. ADR 0032.
+- [ ] Agent fleet dashboard — console panel showing all agents, status, last run, findings count
+- [ ] Inter-agent communication protocol — agents trigger each other via DB tasks (security → ops, compliance → security)
 
 ### Console frontend architecture
 - [x] Split `index.html` (9285 lines) into Jinja2 partials — 18 partials, skeleton 406 lines ✓ v0.32.0
