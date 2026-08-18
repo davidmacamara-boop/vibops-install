@@ -437,6 +437,9 @@ _Last updated: 2026-08-18 · v0.36.0_
 - [ ] MCP server Helm chart for self-hosted deployment
 - [x] SDK: typed Python client (`sdk/`) — 9 resource namespaces, async-first with sync wrapper, auto-retry, typed exceptions, MIT licensed, 19 tests ✓ v0.35.0
 
+### Agent Architecture
+- [ ] Multi-agent graph — orchestrator + capteurs communicate via graph (LangGraph-style). Triggers: capteurs need inter-agent coordination, ops agent context window saturated (224+ tools), parallel multi-workload reasoning. Pre-requisite: ADR 0032.
+
 ### Console frontend architecture
 - [x] Split `index.html` (9285 lines) into Jinja2 partials — 18 partials, skeleton 406 lines ✓ v0.32.0
 - [x] Split `vibops.js` (5305 lines) into 13 JS modules — Object.assign assembler (38 lines) ✓ v0.32.0
