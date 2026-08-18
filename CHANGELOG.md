@@ -7,9 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.36.0] — 2026-08-18
+
 ### Added
-- **VibOps Python SDK v0.1.0** (`sdk/`) — typed async-first client with sync wrapper; 9 resource namespaces (clusters, jobs, models, gateways, finops, agents, security, compliance, insights); auto-retry on 502/503; typed exceptions; MIT licensed; 19 tests; `pip install vibops`
+- **VibOps Python SDK v0.1.0** (`sdk/`) — typed async-first client with sync wrapper; 27 resource namespaces covering 98 API endpoints; auto-retry with exponential backoff; typed exceptions (Auth, Forbidden, NotFound, Conflict, RateLimit, Timeout, Connection); typed response dataclasses; pagination support; SSE streaming for job logs; event hooks; PEP 561 typed package; MIT licensed; 129 tests; `pip install vibops`
 - **Pre-commit ruff lint check** — catches F401/F841/F541 before CI; `python3 -m ruff` fallback
+- Sync script `scripts/sync-sdk-repo.sh` for VibOpsai/vibops-sdk mirror
 
 ---
 
