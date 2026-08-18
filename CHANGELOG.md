@@ -7,12 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.34.0] — 2026-08-18
+
 ### Added
-- **Security agent (DAST)** — 8 automated penetration checks (scope bypass, auth bypass, tenant isolation, input injection, rate limiting, privilege escalation, IDOR, header injection) running weekly via Celery Beat or on-demand via `POST /security/scan`
-- Dev/prod mode awareness — downgrades expected findings in development environments
-- Critical/high findings auto-create ProactiveInsight records; results persisted in `security_scan_results` table
-- API: `POST /security/scan` (trigger), `GET /security/findings` (results)
-- 9 security agent tests (excluded from default suite via `security_scan` marker)
+- **Security agent (DAST)** — 8 automated penetration checks (scope bypass, auth bypass, tenant isolation, input injection, rate limiting, privilege escalation, IDOR, header injection) running weekly via Celery Beat or on-demand via `POST /security/scan`; dev/prod mode awareness; critical/high findings auto-create ProactiveInsight; ADR 0030
+- **Harness reinforcement** — 3 new guardrails: scope enforcement (UserContext namespace/cluster validation), input sanitization (shell injection patterns blocked), write cost cap (max 5 write actions/turn); 38 total guardrail tests
+- **SOC 2 readiness** — 17/17 Trust Service Criteria documented: security policy, incident response plan (P1-P4), backup & recovery policy, risk assessment (14 risks), board oversight, internal communication, readiness checklist
+- **ADR 0030** — Security Agent DAST architecture
+- 9 security agent tests, 14 new guardrail tests
 
 ---
 
