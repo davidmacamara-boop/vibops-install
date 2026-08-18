@@ -9,6 +9,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.35.0] — 2026-08-19
+
+### Added
+- **Compliance agent** — 8 SOC 2 runtime checks verifying controls are active (not just documented): CC6.1 access controls, CC6.2 access provisioning, CC7.1 vulnerability scanning, CC7.2 incident detection, CC7.4 audit trail integrity (HMAC-SHA256 chain), CC8.1 change management (Alembic), A1.2 backup freshness, C1.1 encryption active (Fernet roundtrip, no default keys)
+- Daily Celery Beat schedule + on-demand API
+- Non-compliant findings auto-create ProactiveInsight
+- **ADR 0031** — Compliance agent architecture
+- 10 compliance agent tests
+
+---
+
 ## [0.34.0] — 2026-08-18
 
 ### Added

@@ -60,6 +60,7 @@
 21. [Dataset & RLHF](#21-dataset--rlhf)
 22. [MCP Server](#22-mcp-server)
 23. [Quick reference](#23-quick-reference)
+- [Compliance Verification](#compliance-verification)
 - [Security Scans](#security-scans)
 
 ---
@@ -3285,6 +3286,52 @@ Agent:
 #### Security note
 
 Registry credentials are passed per-job in the payload. Store them in the VibOps Secrets vault and reference them via `{{ secrets.HARBOR_PASSWORD }}` in your agent instructions to avoid exposing them in conversation history.
+
+---
+
+## Compliance Verification
+
+VibOps includes a compliance agent that verifies SOC 2 controls are **active at runtime** — not just documented. It runs 8 checks daily via Celery Beat and can be triggered on-demand via API.
+
+### Triggering a compliance check
+
+**On-demand** (org admin only):
+
+```bash
+POST /api/v1/compliance/check
+```
+
+Returns the check results immediately. The 8 checks run in-process and complete within seconds.
+
+**Automatic**: a daily Celery Beat task runs the full 8-check suite. No configuration required — it is enabled by default.
+
+### The 8 SOC 2 runtime checks
+
+| # | Control | What it verifies |
+|---|---------|------------------|
+| 1 | CC6.1 — Access controls | Auth middleware is active, PolicyEngine is loaded, at least one user exists |
+| 2 | CC6.2 — Access provisioning | Agent identity tokens exist, rotation is configured, expired identities are flagged |
+| 3 | CC7.1 — Vulnerability scanning | A recent DAST scan has run (security agent active) |
+| 4 | CC7.2 — Incident detection | Anomaly detection is active, proactive insights are being generated |
+| 5 | CC7.4 — Audit trail integrity | HMAC-SHA256 chain on audit logs is intact (no tampering) |
+| 6 | CC8.1 — Change management | Alembic migrations are up to date (no pending migrations) |
+| 7 | A1.2 — Backup freshness | Most recent backup exists and is within the configured retention window |
+| 8 | C1.1 — Encryption active | Fernet encryption roundtrip succeeds, no default/placeholder keys in use |
+
+### Viewing results
+
+Non-compliant findings automatically create **ProactiveInsight** records. They appear in the **Proaction Required** panel on the Dashboard tab, alongside GPU health warnings, budget alerts, and security findings.
+
+Each finding includes:
+- The SOC 2 control reference (e.g., CC7.4)
+- A description of what failed
+- Remediation guidance
+
+### When to use it
+
+- **Before an audit**: trigger on-demand to verify all controls pass before presenting evidence to your auditor
+- **After infrastructure changes**: confirm that a migration, key rotation, or backup configuration change did not break a control
+- **Continuous monitoring**: the daily schedule provides SOC 2 CC7.1 evidence of ongoing verification
 
 ---
 

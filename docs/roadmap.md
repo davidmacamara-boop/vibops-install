@@ -1,6 +1,6 @@
 # VibOps — Technical Roadmap
 
-_Last updated: 2026-08-18 · v0.34.0_
+_Last updated: 2026-08-19 · v0.35.0_
 
 ## Principles
 
@@ -179,6 +179,7 @@ _Last updated: 2026-08-18 · v0.34.0_
 ### Security
 - [x] CVE scanning — `pip-audit` on all `requirements.txt` + Trivy filesystem scan, blocking on HIGH/CRITICAL, runs on every push and PR
 - [x] **Security agent (DAST)** — 8 automated pentest checks (scope bypass, auth bypass, tenant isolation, input injection, rate limiting, privilege escalation, IDOR, header injection); weekly Celery Beat schedule + on-demand `POST /security/scan`; dev/prod mode awareness (downgrades expected findings); critical/high findings auto-create ProactiveInsight; results in `security_scan_results` table; SOC 2 CC7.1 continuous monitoring evidence; 9 tests (ADR 0030)
+- [x] **Compliance agent** — 8 SOC 2 runtime checks (CC6.1, CC6.2, CC7.1, CC7.2, CC7.4, CC8.1, A1.2, C1.1) verifying controls are active at runtime; daily Celery Beat + on-demand API; non-compliant findings auto-create ProactiveInsight; 10 tests (ADR 0031) ✓ v0.35.0
 - [x] **Security Sprint (2026-06-20) — 19 vulnerabilities fixed across 5 commits (v0.20.1)**
   - CRITICAL: cross-org access bypass in `tenants.py` — `_enforce_org_isolation()` on all 13 org-scoped routes
   - HIGH: LDAP injection — `escape_filter_chars()` before filter substitution
