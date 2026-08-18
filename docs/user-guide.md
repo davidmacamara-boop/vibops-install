@@ -60,6 +60,7 @@
 21. [Dataset & RLHF](#21-dataset--rlhf)
 22. [MCP Server](#22-mcp-server)
 23. [Quick reference](#23-quick-reference)
+- [Security Scans](#security-scans)
 
 ---
 
@@ -3284,6 +3285,60 @@ Agent:
 #### Security note
 
 Registry credentials are passed per-job in the payload. Store them in the VibOps Secrets vault and reference them via `{{ secrets.HARBOR_PASSWORD }}` in your agent instructions to avoid exposing them in conversation history.
+
+---
+
+## Security Scans
+
+VibOps includes an automated DAST (Dynamic Application Security Testing) agent that continuously validates your instance's security posture. It runs 8 penetration checks weekly via Celery Beat, or on-demand via API.
+
+### Triggering a scan
+
+**On-demand** (org admin only):
+
+```bash
+POST /api/v1/security/scan
+```
+
+Returns a scan ID. The scan runs asynchronously and completes within seconds.
+
+**Automatic**: a weekly Celery Beat task runs the full 8-check suite. No configuration required — it is enabled by default.
+
+### Viewing findings
+
+**API**:
+
+```bash
+GET /api/v1/security/findings
+```
+
+Returns all scan results with severity, check name, description, and remediation guidance. Filter by severity with `?severity=critical` or `?severity=high`.
+
+**Dashboard**: critical and high findings automatically create ProactiveInsight records. They appear in the **Proaction Required** panel on the Dashboard tab, alongside GPU health warnings and budget alerts.
+
+### What the 8 checks test
+
+| # | Check | What it tests |
+|---|-------|---------------|
+| 1 | Scope bypass | Cross-org JWT — attempts to access data from another organization using your token |
+| 2 | Auth bypass | Unauthenticated access to protected endpoints |
+| 3 | Tenant isolation | Cross-org resource access (jobs, secrets, clusters) |
+| 4 | Input injection | Shell metacharacters in kubectl/helm payloads |
+| 5 | Rate limiting | Brute-force login detection and enforcement |
+| 6 | Privilege escalation | Non-admin user accessing admin-only endpoints |
+| 7 | IDOR | Guessed UUIDs belonging to another organization |
+| 8 | Header injection | X-Forwarded-For spoofing, Host header manipulation |
+
+### Dev mode vs prod mode
+
+The scanner is aware of the current environment mode (`APP_ENV`):
+
+| Mode | Behavior |
+|------|----------|
+| **production** | All findings reported at full severity. Critical/high findings create ProactiveInsight records. |
+| **development** | Expected findings (relaxed rate limiting, dev-only auth bypass) are downgraded from CRITICAL/HIGH to LOW/INFO. This prevents alert fatigue during development while keeping the same checks running. |
+
+A typical first scan in development mode returns 0 CRITICAL, 0 HIGH, several PASS, and a handful of LOW findings — this is expected behavior.
 
 ---
 

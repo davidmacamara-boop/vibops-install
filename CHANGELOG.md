@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Security agent (DAST)** — 8 automated penetration checks (scope bypass, auth bypass, tenant isolation, input injection, rate limiting, privilege escalation, IDOR, header injection) running weekly via Celery Beat or on-demand via `POST /security/scan`
+- Dev/prod mode awareness — downgrades expected findings in development environments
+- Critical/high findings auto-create ProactiveInsight records; results persisted in `security_scan_results` table
+- API: `POST /security/scan` (trigger), `GET /security/findings` (results)
+- 9 security agent tests (excluded from default suite via `security_scan` marker)
+
 ---
 
 ## [0.33.0] — 2026-08-17
