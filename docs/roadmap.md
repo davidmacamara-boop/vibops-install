@@ -435,7 +435,7 @@ _Last updated: 2026-08-19 · v0.35.0_
 ### MCP Server
 - [ ] MCP tool coverage parity with full agent tool set
 - [ ] MCP server Helm chart for self-hosted deployment
-- [ ] SDK: typed Python client generated from OpenAPI spec
+- [x] SDK: typed Python client (`sdk/`) — 9 resource namespaces, async-first with sync wrapper, auto-retry, typed exceptions, MIT licensed, 19 tests ✓ v0.35.0
 
 ### Console frontend architecture
 - [x] Split `index.html` (9285 lines) into Jinja2 partials — 18 partials, skeleton 406 lines ✓ v0.32.0

@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **VibOps Python SDK v0.1.0** (`sdk/`) — typed async-first client with sync wrapper; 9 resource namespaces (clusters, jobs, models, gateways, finops, agents, security, compliance, insights); auto-retry on 502/503; typed exceptions; MIT licensed; 19 tests; `pip install vibops`
+- **Pre-commit ruff lint check** — catches F401/F841/F541 before CI; `python3 -m ruff` fallback
+
 ---
 
 ## [0.35.0] — 2026-08-19
