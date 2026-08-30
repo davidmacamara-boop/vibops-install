@@ -163,6 +163,10 @@ services:
     env_file: .env
     environment:
       CORE_API_URL: http://core:8000
+      LLM_PROVIDER: ${LLM_PROVIDER:-claude}
+      LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-6}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
     ports:
       - "8001:8001"
     volumes:

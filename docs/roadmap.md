@@ -332,6 +332,22 @@ _Last updated: 2026-08-18 · v0.36.0_
 ## P1 — Backlog (prioritized)
 
 ### FinOps maturity
+- [ ] **Reseller FinOps dashboard** — aggregate FinOps views for reseller orgs (~27h total):
+  - API: `GET /resellers/me/finops/summary` — per-customer spend MTD, top spenders, total (4h)
+  - API: `GET /resellers/me/finops/chargeback/{year}/{month}` — cross-customer chargeback breakdown (3h)
+  - API: `GET /resellers/me/finops/spend-trend` — aggregated 12-month trend across all customers (4h)
+  - Tests: 3 routes × happy path + edge cases (5h)
+  - Console: "Customers" tab in FinOps — table with spend/budget/trend per client, stacked chart, client filter, reseller guard (10h)
+  - OpenAPI regen (0.5h)
+- [ ] **Reseller data visibility controls (RGPD)** — configurable per-customer data sharing:
+  - Customer opt-in/opt-out on what the reseller can see
+  - Level 1 (billing only): GPU/h consumed, total cost — minimum for invoicing
+  - Level 2 (ops): + cluster names, namespace, workload count — for MCO
+  - Level 3 (full): + model names, agent names, detailed usage — opt-in only
+  - Default: Level 1 (billing only) — RGPD safe
+  - Stored on Organization model: `reseller_visibility_level` field
+  - API routes filter response fields based on customer's visibility level
+  - Consent recorded in audit trail
 - ~~[ ] `accelerator_detect_waste` — time-series mode: sustained underutilisation over N hours (not just snapshot)~~ ✓ Sprint 15
 - ~~[ ] Chargeback generation — automated monthly Celery Beat task (currently admin-triggered)~~ ✓ Sprint 15
 - [x] **GPU passthrough correlation (MOAT)** — detect PCIe passthrough in VM config, match VM hostname ↔ K8s node, unified FinOps (VM + GPU cost on same asset). Fleet VM table: GPU column + drill-down drawer (hypervisor → K8s → workload → combined cost). ✓ v0.26.0
@@ -339,11 +355,10 @@ _Last updated: 2026-08-18 · v0.36.0_
 - [x] VM cost history — VmCostSnapshot table, 12-month spend trend parity with GPU ✓ v0.29.0
 - [x] Currency conversion — EUR/USD dynamic symbol from budget.currency ✓ v0.29.0
 - [x] White-label routing — custom domains per CSP via `white_label_domain` — `GET /branding` resolves CSP brand from Host header ✓ Sprint 7
-- [ ] FinOps UI — consent management + dataset export controls in console (ADR 0018 — Decision 5)
 - ~~[ ] Budget enforcement on pre-Sprint 9 jobs — sum Job records instead of ChargebackReport~~ ✓ Sprint 14
 
 ### Dataset & RLHF maturity
-- [ ] Dataset UI — consent management and export controls in console
+- [ ] Dataset UI — consent management + dataset export controls in console (ADR 0018 — Decision 5)
 - ~~[ ] GPU utilization per-job — per-pod DCGM via gateway (attribution currently impossible with concurrent workloads)~~ ✓ Sprint 4 (live cost attribution via ClusterRate × elapsed time)
 - ~~[ ] Salt rotation migration plan for `DATASET_PSEUDONYMIZATION_SALT`~~ ✓ Sprint 15
 - ~~[ ] Reseller consent ownership — which org sets consent for reseller_customer orgs~~ ✓ Sprint 15 (ADR 0020 Decision 2)
