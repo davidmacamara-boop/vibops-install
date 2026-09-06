@@ -346,7 +346,7 @@ See section [4 — The Morning Brief](#4-the-morning-brief) for details.
 - **Git** — GitOps status of the selected application: commit history, branch, rollback, inline repo linking
 - **Cluster** — CPU / RAM / GPU resources of the active cluster
 - **LLM / NIM** — inference workload management
-- **Automations** — trigger rules and pipelines
+- **Automations** — triggers, agents (grouped triggers with start/stop lifecycle), and webhooks
 - **FinOps** — waste, budget, chargeback
 - **⚙ Admin** — administration panel (visible to `org_admin` only)
 - **Language selector** — FR / EN / ES / DE / IT / PT / JA / ZH
@@ -905,14 +905,29 @@ The agent queries all four sources in parallel (`asyncio.gather`) and produces a
 
 When a Prometheus alert arrives via webhook, the agent receives it automatically, launches the diagnosis pipeline, and posts an analysis in the active chat (or opens a new conversation) without any action on your part.
 
-### Auto-healing: creating a trigger
+### Automations: Triggers and Agents
+
+VibOps automations have three concepts:
+
+**Triggers** — individual rules that fire an action on a schedule or when a metric condition is met. Create them in the **Triggers** tab:
+
+1. Choose an **action** from the 240+ available actions (recommended actions auto-configure the metric condition)
+2. Set a **schedule** using the visual builder (frequency, time, day) — no cron syntax needed
+3. Set a **cooldown** to prevent re-triggering too quickly
+
+**Agents** — named groups of triggers that can be started and stopped as a unit. Create them in the **Agents** tab by selecting existing triggers. Example: an "auto-scaler" agent with two triggers — one to scale up when GPU > 90%, one to scale down when GPU < 20%.
+
+**Chaining** — triggers can launch pipelines (`trigger_pipeline`) or enable/disable other triggers (`enable_trigger` / `disable_trigger`). This lets you build multi-step autonomous workflows without code.
 
 ```
-Set up a rule: if a pod has more than 3 restarts in 10 minutes,
-automatically restart the deployment and notify on Slack.
+Set up an agent that scales my inference deployment when GPU
+utilization exceeds 90%, and scales it back down when it drops
+below 20%. Name it auto-scaler.
 ```
 
 For destructive actions (rollback, scale-down), the trigger will pause and ask for confirmation — the same guardrail as for manual actions.
+
+Agents can be started and stopped from the **Agents** tab or via the API (`POST /triggers/agents/{name}/start`, `POST /triggers/agents/{name}/stop`).
 
 ---
 
