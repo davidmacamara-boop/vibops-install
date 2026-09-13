@@ -9,6 +9,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.41.4] — 2026-09-13
+
+### Fixed
+- **Agent unusable with generation-5 models** — `_thinking_params()` only switched to
+  adaptive thinking for fable/mythos; every other model got the removed
+  `{"type": "enabled", "budget_tokens": N}` form and the API answered
+  `400 thinking.type.enabled is not supported`. Adaptive is now the default;
+  `budget_tokens` is reserved for Haiku 4.5 and pre-4.6 generations
+- Six CVEs in `httpx2` / `httpcore2` (PYSEC-2026-3844 … 3849) — the `anyio==4.7.0` pin
+  forced the resolver down to `httpx2 2.6.0`; `anyio` raised to 4.15.1 and
+  `httpx2==2.12.0` pinned explicitly
+- Five hardcoded versions in Python code, including the FastAPI `version=` that feeds
+  `docs/openapi.json` — the published contract announced 0.25.0
+- `sync-mcp` and `publish-install` targeted `github.repository_owner` instead of the
+  `VibOpsai` org; `sync-mcp` additionally had `actions/checkout` credentials overriding
+  the push token. Both public repos had been stale since 06–08/09, `publish-install`
+  silently green while publishing to the wrong target
+- Orphan `landing` gitlink (mode 160000, no `.gitmodules`, unreachable commit) breaking
+  every `git submodule` call
+- `anthropic` imported by `core/app/workers/eval_task.py` but never declared — the worker
+  raised `ImportError` when used with `provider=claude`
+
+### Added
+- `THINKING_EFFORT` (`low` → `max`) exposing `output_config.effort`, the replacement for
+  the now-inert `thinking_budget_tokens`
+- `scripts/bump-version.sh` — updates the 18 version locations in one command;
+  `--check` enforces consistency and gates the CI `lint` job
+- CHANGELOG entries for 0.40.0 → 0.41.3, previously undocumented (177 commits)
+
+### Changed
+- `anthropic` SDK 0.49.0 → 1.5.0 (HTTP layer moved to `httpx2`)
+- Vendor-neutral naming outside the provider layer — audit actor `claude-agent` →
+  `vibops-agent` (rows written earlier keep the old value; the console filter accepts
+  both), API defaults aligned on the database (`provider="vibops"`), 22 comments reworded
+- Default model `claude-sonnet-4-6` → `claude-sonnet-5` (current generation, and cheaper)
+
+---
+
 ## [0.41.3] — 2026-09-12
 
 ### Added
