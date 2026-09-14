@@ -336,12 +336,14 @@ _Last updated: 2026-08-31 · v0.38.0_
 Findings from a full-repository review. Ordered by what they cost if ignored, not by
 difficulty. Full rationale and evidence: the review document and the commits cited.
 
-- [ ] **Decompose `agent_service.py`** — 6,505 lines, 68% of the agent module, in the
-  module with the lowest test density in the repo (1 test / 135 lines, against 1 / 37
-  for connectors). Every agent fix lands here, and it is where a regression is least
-  likely to be caught. The three agent bugs found during the review all lived in it.
-  Split by responsibility — tool loop, prompt building, routing, result truncation —
-  and raise coverage on the extracted parts. ~5–8 days, incremental.
+- [x] **Decompose `agent_service.py`** — was 6,505 lines at 1 test / 135 lines, the
+  lowest test density in the repo. Now 987, and 96.6% covered. Split into
+  `tools_catalog`, `tool_routes`, `core_calls`, `vm_operations`, `incident_operations`,
+  `job_operations`, `gateway_operations`, `prometheus_queries`. `_execute_tool` went
+  from 963 lines to 110 and is a dispatcher again; `chat_stream` went from 1% to 100%
+  covered. Characterization tests came first at every step and caught eleven defects,
+  each fixed in its own commit. Remaining: extracting the loop itself — optional, the
+  file is no longer a liability. (14 Sept 2026)
 
 - [ ] **Enforce post-action verification in the agent loop** — the highest-value gap in
   the execution loop, and the one that touches correctness rather than cost. Today the
@@ -373,7 +375,18 @@ difficulty. Full rationale and evidence: the review document and the commits cit
 
   ~8–12 days. Specification and rationale:
   [`docs/agent-execution-loop.html`](agent-execution-loop.html), which states the thesis
-  as "200 does not mean deployed".
+  as "200 does not mean deployed", and ADR 0038 for the mechanism.
+
+  **Step 1 landed (14 Sept 2026).** `VerificationSpec` sits in `ToolSpec` beside
+  `supports_dry_run`; six actions declare a proof; the field is carried through the
+  core catalogue so it reaches the agent. A CI invariant makes the declaration
+  mandatory: of 74 destructive actions, 6 are proven and 68 are listed in
+  `VERIFICATION_PENDING`, a list that may shrink and never grow — a new destructive
+  action arrives with its proof or CI stops it. Two are blocked rather than pending:
+  `delete_deployment` has no collection read exposed to the agent (a failing
+  single-object read cannot tell "deleted" from "blind"), and `helm_rollback` needs a
+  `revision_matches` predicate. Steps 2–4 remain: implement the predicates, enforce in
+  the loop, and feed evidence back on failure.
 
 - [ ] **Filter the tool catalogue per task** — `tools=self._effective_tools` sends all
   304 definitions on every turn, at three call sites in `agent_service.py`. A cost and
