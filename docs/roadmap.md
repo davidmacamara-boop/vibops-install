@@ -331,6 +331,69 @@ _Last updated: 2026-08-31 · v0.38.0_
 
 ## P1 — Backlog (prioritized)
 
+### Technical debt & hardening (architecture review, 12–14 Sept 2026)
+
+Findings from a full-repository review. Ordered by what they cost if ignored, not by
+difficulty. Full rationale and evidence: the review document and the commits cited.
+
+- [ ] **Decompose `agent_service.py`** — 6,505 lines, 68% of the agent module, in the
+  module with the lowest test density in the repo (1 test / 135 lines, against 1 / 37
+  for connectors). Every agent fix lands here, and it is where a regression is least
+  likely to be caught. The three agent bugs found during the review all lived in it.
+  Split by responsibility — tool loop, prompt building, routing, result truncation —
+  and raise coverage on the extracted parts. ~5–8 days, incremental.
+
+- [ ] **Typed contracts between agents, before any event bus** — ADR 0034's first
+  stated need is *typed contracts*, which is a schema problem, not a transport one.
+  Pydantic models over the existing tables deliver most of the value with nothing
+  deployed. Measure whether the pain persists before committing to the ~15-day bus.
+  Context: `anomaly_events` is referenced by 14 modules and has 4 producers
+  (`anomaly_task`, `agent_anomaly_task`, `k8s_anomaly_task`, `vm_anomaly_task`) — the
+  coupling grew while the ADR waited. ~2–3 days.
+
+- [ ] **Encrypt the Cloudflare → origin leg** — the firewall (13/09) closed direct
+  access to the origin, which was the bulk of the risk. Traffic between the edge and
+  Helsinki still crosses transit providers in clear, session tokens included. A
+  Cloudflare Origin CA certificate (free, 15 years, no renewal to watch) plus SSL mode
+  *Full (strict)*. Cloudflare itself flags Flexible mode as insecure. ~1 hour.
+
+- [ ] **Enable Redis persistence before routing events through it** — production runs
+  `appendonly no` with only spaced RDB snapshots (up to one hour). Harmless today
+  (Redis is a Celery broker, data lives in PostgreSQL), material the day anomalies and
+  budget alerts transit through it. Decide alongside the event bus, not after. ~15 min.
+
+- [ ] **Extend `--check` to product figures** — `bump-version.sh --check` guards the 18
+  version locations and works. The same drift hit the documented counts: 26, 31 and 36
+  connectors were claimed for 33 real, 59 to 130 tools for 117. Corrected by hand on
+  13/09; nothing prevents the next drift. A counting script plus a CI step. ~1 day.
+
+- [ ] **Delete `deploy.yml`** — restricted to tags on 13/09 but wholly redundant. Its
+  Helm job stops for want of a `KUBECONFIG` secret (no remote deploy has ever run); its
+  build job produces three images `release-images.yml` rebuilds on the same tags, plus
+  five more. Confirm no Helm deployment is planned, then remove. ~30 min.
+
+- [ ] **Decide on the leaked admin password** — removed from all five scripts (#34 and
+  `b4067a8`), but it remains readable in git history via `git log -p`, for anyone who
+  has or had repository access. If it opens anything beyond the seed fixtures, it must
+  be **changed**, not merely erased. History rewriting is possible but invalidates every
+  clone; rotation is simpler. Decision, not development.
+
+- [ ] **Reconcile the figures in `docs/commercial/`** — the RFI responses and the
+  valuation document claim 130, 83 and 70 tools and 26 connectors, and contradict each
+  other between the FR and EN versions of the same dossier. Left untouched during the
+  audit because those documents may already have been sent: correcting the archive
+  would diverge from what was transmitted. To settle before the next client sendout.
+
+- [ ] **Choose between `STATUS.md` and `CHANGELOG.md`** — two parallel histories in
+  different formats. `CHANGELOG.md` was brought up to date on 13/09 (177 commits);
+  `STATUS.md` still stops at 09/09. Whichever is authoritative, the other will drift
+  unnoticed — exactly how the counts above went wrong.
+
+- [ ] **`beat` and `gateway` image tags** — `release-images.yml` publishes 8 tags from
+  6 Dockerfiles; no compose references those two, and `worker`/`beat` duplicate the
+  `core` image. Two builds paid per release for nothing.
+
+
 ### FinOps maturity
 - [ ] **Reseller FinOps dashboard** — aggregate FinOps views for reseller orgs (~27h total):
   - API: `GET /resellers/me/finops/summary` — per-customer spend MTD, top spenders, total (4h)
@@ -481,7 +544,13 @@ _Last updated: 2026-08-31 · v0.38.0_
 - [ ] Onboarding Assistant — conversational wizard for new clients (replaces HTML wizard with AI-guided setup)
 
 **Infrastructure:**
-- [ ] Agent graph dispatcher — custom state machine in DB (`agent_tasks` table) + Celery routing. No LangGraph/CrewAI dependency. ADR 0032.
+- [ ] Agent graph dispatcher — **research done 2026-09-13** (ADR 0034). Redis Streams
+  consumer groups retained: at-least-once, pending-entry tracking, replay, and Redis 7
+  is already deployed — zero new infrastructure. Temporal ruled out (dedicated server +
+  database for 8 agents), Prefect/Dagster ruled out (acyclic by construction, cannot
+  express `anomaly → insight → action → anomaly`), LangGraph ruled out (built for LLM
+  agents; ours are deterministic domain services). **Do the typed contracts first** —
+  see below — and only build the bus if the pain persists. ~15 days if pursued.
 - [ ] Agent fleet dashboard — console panel showing all agents, status, last run, findings count
 - [ ] Inter-agent communication protocol — agents trigger each other via DB tasks (security → ops, compliance → security)
 
