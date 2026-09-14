@@ -343,6 +343,55 @@ difficulty. Full rationale and evidence: the review document and the commits cit
   Split by responsibility — tool loop, prompt building, routing, result truncation —
   and raise coverage on the extracted parts. ~5–8 days, incremental.
 
+- [ ] **Enforce post-action verification in the agent loop** — the highest-value gap in
+  the execution loop, and the one that touches correctness rather than cost. Today the
+  agent reports success on a tool's return code: a 200 proves the API accepted the
+  manifest, not that a pod started or a GPU was reserved. The system prompt asks for
+  verification (rule 2, "VERIFY VIA TOOLS, NEVER FROM MEMORY") but **line 34
+  contradicts it** — "when all tools have returned status=success, the task is done,
+  NEVER rerun ... on grounds of verifying". Nothing enforces it either way.
+
+  This would be the third mechanism of the same family as the policy engine and the
+  JWT-anchored isolation: a guarantee that fails loudly instead of relying on the
+  model's goodwill. The policy engine says *no*; the token says *on whose behalf*;
+  verification would say *it is actually done*. Commercially, it is the one of the
+  three a CIO will ask you to prove.
+
+  Scope — 71 actions are declared `destructive` across connectors, but they share
+  proofs; roughly ten cover the bulk of the risk (deploy_model, helm_upgrade,
+  deploy_webapp, nim_deploy, scale, delete):
+  - declare a verification spec beside each destructive action, the way
+    `supports_dry_run` already sits in `ToolSpec` (~2 days)
+  - implement the proofs that matter: pods Running and Ready, rollout converged, GPU
+    allocated, and for inference an actual request returning a response — the only
+    check that crosses the whole stack (~3–4 days)
+  - enforce it in the loop: no exit after a destructive action without proof. The
+    delicate part — a rollout takes minutes, so each action needs its own timeout
+    (~3 days)
+  - fix the prompt contradiction on line 34 (~1 hour, but nothing applies without it)
+  - on failure, pod logs and events go back into the context, not a status code
+
+  ~8–12 days. Specification and rationale:
+  [`docs/agent-execution-loop.html`](agent-execution-loop.html), which states the thesis
+  as "200 does not mean deployed".
+
+- [ ] **Filter the tool catalogue per task** — `tools=self._effective_tools` sends all
+  304 definitions on every turn, at three call sites in `agent_service.py`. A cost and
+  accuracy problem, not a correctness one: tokens spent every turn, and selection
+  degrades as the catalogue grows.
+
+  **Watch the vendor-agnosticism tension**: the natural mechanism — `defer_loading` and
+  a tool-search tool — is Anthropic-specific and would tie the agent to one provider,
+  exactly what the architecture avoids elsewhere. The right layer is `llm_client`,
+  which already abstracts providers: filter the catalogue before the call, whichever
+  model sits behind. ~3–5 days.
+
+- [ ] *(not planned)* **Mid-loop resume after a crash** — listed on the execution-loop
+  diagram, deliberately left out. The diagram contradicts itself here: it asks for
+  resume while noting "no replay: an upgrade is not idempotent". A `helm_upgrade`
+  interrupted midway is not resumable, it is to be diagnosed. The honest version of
+  that box is the journal, which the HMAC-chained `audit_log` already largely provides.
+
 - [ ] **Typed contracts between agents, before any event bus** — ADR 0034's first
   stated need is *typed contracts*, which is a schema problem, not a transport one.
   Pydantic models over the existing tables deliver most of the value with nothing
