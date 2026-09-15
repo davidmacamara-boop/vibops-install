@@ -479,12 +479,22 @@ difficulty. Full rationale and evidence: the review document and the commits cit
   "Draft (research needed)" while its conclusion lived only here, so a reader of the
   ADR would have concluded the opposite of what was decided.
 
-  Context, measured rather than recalled: the `AnomalyEvent` model is touched by
-  **8 modules, four of which write** — `anomaly_task`, `agent_anomaly_task`,
-  `vm_anomaly_task`, `gpu_health_task` — against readers in `proactive_agent_task`,
-  `compliance_checker` and the `anomaly` API route. (This entry previously read
-  "14 modules and 4 producers", which conflated the table name with the model and
-  named `k8s_anomaly_task`, which does not write it.) ~2–3 days.
+  Scope, measured rather than recalled. Three shared models, **14 touchpoints across
+  12 distinct modules** — the model definitions themselves are not touchpoints:
+
+  | Model | Modules | Touchpoints |
+  |---|---|---|
+  | `AnomalyEvent` | 8 | 7 — written by `anomaly_task`, `agent_anomaly_task`, `vm_anomaly_task`, `gpu_health_task`; read by `proactive_agent_task`, `compliance_checker`, `api/v1/anomaly` |
+  | `ProactiveInsight` | 6 | 5 — `proactive_agent_task`, `compliance_check_task`, `security_scan_task`, `compliance_checker`, `api/v1/insights` |
+  | `BudgetAlert` | 3 | 2 — `budget_service`, `api/v1/finops` |
+
+  `compliance_checker` and `proactive_agent_task` each read two of the three: the
+  cross-domain consumers, where the missing contract costs most.
+
+  Two earlier figures in this entry were wrong. "14 modules and 4 producers" for
+  `anomaly_events` conflated the table name with the model and named
+  `k8s_anomaly_task`, which does not write it. The ~2–3 day estimate was anchored on
+  that one model; the real scope is three. **~3–4 days.**
 
 - [ ] **Encrypt the Cloudflare → origin leg** — the firewall (13/09) closed direct
   access to the origin, which was the bulk of the risk. Traffic between the edge and
