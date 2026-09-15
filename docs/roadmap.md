@@ -413,11 +413,34 @@ difficulty. Full rationale and evidence: the review document and the commits cit
   release still listed has no pod to inspect. Each piece is capped on its own so the
   verdict survives beside it.
 
-  **What remains is declarations, not mechanism.** 68 of 74 destructive actions are
-  still in `VERIFICATION_PENDING`; the ratchet in `connectors/tests/` makes that
-  count visible and stops it growing. Two are blocked on something else:
-  `delete_deployment` needs `list_deployments` exposed to the agent, and
-  `helm_rollback` needs a `revision_matches` predicate.
+  **Verified against a real cluster (15 Sept 2026).** kind + the full stack, a
+  deployment with an image that does not exist. The verdict was right first time —
+  `disproven`, "only 0/2 replicas ready" — with `ImagePullBackOff`, the pod name and
+  the offending image in 2 551 characters. Three defects on the way there, none
+  visible from a unit test because each lives at a seam the tests mock: the proof
+  tool was refused by the PolicyEngine, the events that explain a failure are on the
+  Pod and not the Deployment, and the readable summary was being discarded in favour
+  of the job envelope.
+
+  **What remains is declarations, not mechanism.** 70 of 82 destructive actions are
+  in `VERIFICATION_PENDING`; the ratchet makes the count visible. Blocked rather than
+  pending: `delete_deployment` needs `list_deployments` exposed to the agent,
+  `helm_rollback` a `revision_matches` predicate, `create_ingress` a read tool for
+  Ingress objects, and `configure_gpu_timeslicing` a predicate that should not be
+  written before seeing the real output of `get_gpu_timeslicing` on a GPU node.
+
+- [ ] **Twenty agent tools the PolicyEngine refuses** — found by the run above and
+  now guarded by `connectors/tests/test_agent_tools_are_known.py`. Ten were
+  dispatched by a connector with no `TOOL_CATALOG` entry and are fixed. Ten remain
+  dead: their action no longer exists under that name, mostly renamed by the
+  vendor-agnostic refactor (`configure_mig`, `get_dcgm_metrics`,
+  `get_gpu_operator_status` → `accelerator_*`; `get_gke_credentials`,
+  `get_aks_credentials` → `update_kubeconfig_*`), plus node-pool scaling that GKE and
+  AKS never implemented, and `scale_deployment`, which the MCP exposes too and is
+  equally broken there. Each is to be implemented under its current name or removed
+  from the agent's catalogue — they are advertised on every turn, cost tokens in
+  every request, and burn a turn when the model calls one. The system prompt already
+  forbids `get_gpu_operator_status` by name while the tool is still offered. ~1 day.
 
 - [ ] **Filter the tool catalogue per task** — `tools=self._effective_tools` sends all
   304 definitions on every turn, at three call sites in `agent_service.py`. A cost and
