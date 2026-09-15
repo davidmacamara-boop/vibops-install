@@ -385,8 +385,19 @@ difficulty. Full rationale and evidence: the review document and the commits cit
   action arrives with its proof or CI stops it. Two are blocked rather than pending:
   `delete_deployment` has no collection read exposed to the agent (a failing
   single-object read cannot tell "deleted" from "blind"), and `helm_rollback` needs a
-  `revision_matches` predicate. Steps 2–4 remain: implement the predicates, enforce in
-  the loop, and feed evidence back on failure.
+  `revision_matches` predicate.
+
+  **Step 2 landed (15 Sept 2026).** The three predicates are implemented in
+  `agent/app/services/verification.py`, at 100% branch coverage, with a
+  cross-package invariant asserting that what connectors may declare and what the
+  agent can evaluate are the same set. Verdicts are three, not two: `UNKNOWN` — the
+  evidence could not be obtained — is never reported as proof, since a check that
+  passes while blind is worse than no check. Writing the predicates surfaced that
+  `get_deployment_status`, the proof tool for four of the six declarations, returned
+  a pending job instead of the deployment state; fixed first.
+
+  Steps 3–4 remain: enforce in the loop (and amend rule 5 of the system prompt),
+  then feed logs and events back into the context on failure.
 
 - [ ] **Filter the tool catalogue per task** — `tools=self._effective_tools` sends all
   304 definitions on every turn, at three call sites in `agent_service.py`. A cost and
