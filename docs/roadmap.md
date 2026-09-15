@@ -405,8 +405,19 @@ difficulty. Full rationale and evidence: the review document and the commits cit
   and tells the model the harness has already done the checking. 31 enforcement
   tests, 100% on the three methods touched.
 
-  Step 4 remains: on a `disproven` verdict, feed pod logs and events back into the
-  context rather than a verdict line, so the agent can diagnose instead of report.
+  **Step 4 landed (15 Sept 2026), completing the mechanism.** On a `disproven`
+  verdict the harness reads the evidence — events, then container logs — and
+  attaches it to the same tool result, so the agent explains the failure instead of
+  reporting it. Which evidence is declared beside the proof, not inferred: the four
+  Kubernetes declarations carry one, the two `absent` ones do not, because a Helm
+  release still listed has no pod to inspect. Each piece is capped on its own so the
+  verdict survives beside it.
+
+  **What remains is declarations, not mechanism.** 68 of 74 destructive actions are
+  still in `VERIFICATION_PENDING`; the ratchet in `connectors/tests/` makes that
+  count visible and stops it growing. Two are blocked on something else:
+  `delete_deployment` needs `list_deployments` exposed to the agent, and
+  `helm_rollback` needs a `revision_matches` predicate.
 
 - [ ] **Filter the tool catalogue per task** — `tools=self._effective_tools` sends all
   304 definitions on every turn, at three call sites in `agent_service.py`. A cost and
