@@ -474,9 +474,17 @@ difficulty. Full rationale and evidence: the review document and the commits cit
   stated need is *typed contracts*, which is a schema problem, not a transport one.
   Pydantic models over the existing tables deliver most of the value with nothing
   deployed. Measure whether the pain persists before committing to the ~15-day bus.
-  Context: `anomaly_events` is referenced by 14 modules and has 4 producers
-  (`anomaly_task`, `agent_anomaly_task`, `k8s_anomaly_task`, `vm_anomaly_task`) — the
-  coupling grew while the ADR waited. ~2–3 days.
+
+  Decided and written into ADR 0034 on 15/09/2026; the ADR had been left at
+  "Draft (research needed)" while its conclusion lived only here, so a reader of the
+  ADR would have concluded the opposite of what was decided.
+
+  Context, measured rather than recalled: the `AnomalyEvent` model is touched by
+  **8 modules, four of which write** — `anomaly_task`, `agent_anomaly_task`,
+  `vm_anomaly_task`, `gpu_health_task` — against readers in `proactive_agent_task`,
+  `compliance_checker` and the `anomaly` API route. (This entry previously read
+  "14 modules and 4 producers", which conflated the table name with the model and
+  named `k8s_anomaly_task`, which does not write it.) ~2–3 days.
 
 - [ ] **Encrypt the Cloudflare → origin leg** — the firewall (13/09) closed direct
   access to the origin, which was the bulk of the risk. Traffic between the edge and
