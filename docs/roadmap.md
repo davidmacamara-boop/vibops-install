@@ -432,12 +432,23 @@ difficulty. Full rationale and evidence: the review document and the commits cit
 - [ ] **Twenty agent tools the PolicyEngine refuses** — found by the run above and
   now guarded by `connectors/tests/test_agent_tools_are_known.py`. Ten were
   dispatched by a connector with no `TOOL_CATALOG` entry and are fixed. Ten remain
-  dead: their action no longer exists under that name, mostly renamed by the
-  vendor-agnostic refactor (`configure_mig`, `get_dcgm_metrics`,
+  dead: their action no longer exists under that name (`get_dcgm_metrics`,
   `get_gpu_operator_status` → `accelerator_*`; `get_gke_credentials`,
   `get_aks_credentials` → `update_kubeconfig_*`), plus node-pool scaling that GKE and
   AKS never implemented, and `scale_deployment`, which the MCP exposes too and is
-  equally broken there. Each is to be implemented under its current name or removed
+  equally broken there.
+
+  Three of the ten are already fixed: `get_mig_status`, `configure_mig` and
+  `disable_mig` are back on `NvidiaConnector`. MIG is the term the market asks for,
+  and the base class allows vendor connectors to carry their own tools beside the
+  portable ones — `AmdConnector` already did. Sprint 5 had rewired only the two
+  writes into `accelerator_partition_device` and left `_query_mig_state` with no
+  caller at all, so MIG could be partitioned and never inspected. Restoring the read
+  also gives the two writes their proof: `partitioning_enabled` /
+  `partitioning_disabled`, which takes them out of `VERIFICATION_PENDING`. Untested
+  on real NVIDIA hardware — the predicates are written against the exact shape
+  `_query_mig_state` returns, but no A100 has confirmed the node labels behave as
+  the connector assumes. Each is to be implemented under its current name or removed
   from the agent's catalogue — they are advertised on every turn, cost tokens in
   every request, and burn a turn when the model calls one. The system prompt already
   forbids `get_gpu_operator_status` by name while the tool is still offered. ~1 day.
