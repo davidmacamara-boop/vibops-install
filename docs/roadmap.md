@@ -396,8 +396,17 @@ difficulty. Full rationale and evidence: the review document and the commits cit
   `get_deployment_status`, the proof tool for four of the six declarations, returned
   a pending job instead of the deployment state; fixed first.
 
-  Steps 3–4 remain: enforce in the loop (and amend rule 5 of the system prompt),
-  then feed logs and events back into the context on failure.
+  **Step 3 landed (15 Sept 2026).** Enforcement sits in `_execute_tool`, wrapping
+  the dispatch, so both chat paths are covered without duplicating the loop. The
+  lookup keys on the effective action — `create_job` and `confirm_action` carry the
+  real one in their payload — and the verdict rides on the result the model
+  receives, with an instruction for each of the three cases. Rule 5 of the system
+  prompt no longer contradicts rule 2: it forbids repeating work, not checking it,
+  and tells the model the harness has already done the checking. 31 enforcement
+  tests, 100% on the three methods touched.
+
+  Step 4 remains: on a `disproven` verdict, feed pod logs and events back into the
+  context rather than a verdict line, so the agent can diagnose instead of report.
 
 - [ ] **Filter the tool catalogue per task** — `tools=self._effective_tools` sends all
   304 definitions on every turn, at three call sites in `agent_service.py`. A cost and
