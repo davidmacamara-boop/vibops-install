@@ -28,6 +28,10 @@ Customer network (sovereign)
 │  Nothing comes IN. No inbound port, no VPN, no firewall change.
 ```
 
+**Images are built for `linux/amd64` only.** An arm64 node — Graviton,
+Ampere, Apple Silicon — cannot pull them. Check your node architecture before
+planning a deployment.
+
 **Connect does not register itself.** The gateway is created in the console
 first; Connect authenticates as an existing gateway and needs its id. A
 container started without `VIBOPS_GATEWAY_ID` logs one line and exits.
@@ -97,13 +101,15 @@ which returns a dry-run summary until you pass `?confirmed=true`.
 Copy the command the console shows you. It already carries the id and the
 token.
 
-**Helm** (inside a Kubernetes cluster):
+**Helm** (inside a Kubernetes cluster). The chart is published as a GitHub
+release asset — there is no public Helm repository yet, so fetch the chart
+rather than adding a repo:
 
 ```bash
-helm repo add vibops https://install.vibops.ai/charts
-helm repo update
+gh release download vibops-connect-0.26.0 \
+  --repo davidmacamara-boop/vibops --pattern '*.tgz'
 
-helm upgrade --install vibops-connect vibops/vibops-connect \
+helm upgrade --install vibops-connect ./vibops-connect-0.26.0.tgz \
   --namespace vibops-connect --create-namespace \
   --set gateway.id="3f2a…-…-…" \
   --set vibops.coreUrl="https://vibops.example.com" \
@@ -132,8 +138,13 @@ type.
 
 ### Step 4 — Verify
 
-Within 30 seconds the gateway is **online** in the console, with its clusters,
-its hypervisors and whatever the scan found.
+Within a few seconds the gateway is **online** in the console with its
+clusters and hypervisors. The subnet scan runs afterwards, in the background,
+and its findings appear on the following heartbeat — 15 seconds later on a
+small subnet, minutes on a large one.
+
+Measured on a kind cluster on 18/09: gateway online in the same second as
+start-up, scan complete 32 seconds later on a /24.
 
 ```bash
 curl -s https://vibops.example.com/api/v1/gateways \
