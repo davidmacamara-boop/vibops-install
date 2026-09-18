@@ -221,6 +221,24 @@ services:
       - console_data:/data
     ports:
       - "8003:8003"
+    # Sans healthcheck, console etait declare « Up » des que le processus
+    # existait — bien avant qu'uvicorn serve. `docker compose up -d` rendait
+    # donc la main sur une console qui repondait par une reponse vide (curl
+    # exit 52), et tout script qui enchainait dessus echouait par intermittence.
+    #
+    # `/api/health` existe depuis longtemps — sonde de liveness deja publique,
+    # 361 octets, contre 765 Ko pour `/`. Rien a ajouter cote application :
+    # il manquait seulement que le compose le demande.
+    # Meme forme que celui de core : urllib plutot que curl, absent de l'image.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/api/health')\" 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # La console attend core (service_healthy) avant de demarrer, donc son
+      # propre demarrage est court — mais elle initialise une base SQLite et
+      # tronque son WAL au passage.
+      start_period: 15s
     depends_on:
       core:
         condition: service_healthy
