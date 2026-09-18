@@ -106,10 +106,10 @@ release asset — there is no public Helm repository yet, so fetch the chart
 rather than adding a repo:
 
 ```bash
-gh release download vibops-connect-0.26.0 \
+gh release download vibops-connect-0.27.0 \
   --repo davidmacamara-boop/vibops --pattern '*.tgz'
 
-helm upgrade --install vibops-connect ./vibops-connect-0.26.0.tgz \
+helm upgrade --install vibops-connect ./vibops-connect-0.27.0.tgz \
   --namespace vibops-connect --create-namespace \
   --set gateway.id="3f2a…-…-…" \
   --set vibops.coreUrl="https://vibops.example.com" \
