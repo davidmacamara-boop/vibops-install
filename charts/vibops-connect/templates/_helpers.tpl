@@ -53,10 +53,15 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{- define "vibops-connect.image" -}}
+{{- /* Un tag vide retombe sur appVersion, de sorte que le chart et l'image ne
+       divergent pas en silence. Sans ce defaut, image.tag="" produisait
+       « repository: » — un deux-points final que YAML refuse, et le rendu
+       echouait avec une erreur qui ne nommait ni le tag ni l'image. */ -}}
+{{- $tag := .Values.image.tag | default .Chart.AppVersion }}
 {{- $registry := .Values.global.imageRegistry | default "" }}
 {{- if $registry }}
-{{- printf "%s/%s:%s" (trimSuffix "/" $registry) .Values.image.repository .Values.image.tag }}
+{{- printf "%s/%s:%s" (trimSuffix "/" $registry) .Values.image.repository $tag }}
 {{- else }}
-{{- printf "%s:%s" .Values.image.repository .Values.image.tag }}
+{{- printf "%s:%s" .Values.image.repository $tag }}
 {{- end }}
 {{- end }}

@@ -9,17 +9,21 @@ global:
 
 image:
   repository: ghcr.io/davidmacamara-boop/vibops-connect
-  tag: "0.30.0"
+  # Vide = la version du chart (Chart.yaml appVersion), pour que les deux ne
+  # divergent pas silencieusement.
+  tag: ""
   pullPolicy: IfNotPresent
 
 # ── Gateway identity ──────────────────────────────────────────────────────────
 gateway:
-  # Unique name (displayed in VibOps console, e.g. "client-acme-prod")
-  name: ""
-  # Associated cluster name (e.g. "gpu-cluster-west")
-  cluster: ""
-  # Organization ID (provided by VibOps)
-  orgId: ""
+  # UUID of the gateway, created in the VibOps console before installing this
+  # chart. Connect does not register itself: it authenticates as an existing
+  # gateway and exits at once without this.
+  id: ""
+  # Name under which the hypervisor appears, if one is configured below. This
+  # is the key alert rules and pricing target, so it must be stable and chosen
+  # deliberately. Defaults to the hypervisor type.
+  hypervisorName: ""
 
 # ── Connection to VibOps Core API ─────────────────────────────────────────────
 vibops:
@@ -39,9 +43,49 @@ kubeconfig:
 
 # ── Platform type ─────────────────────────────────────────────────────────────
 # "kubernetes" (default), "hypervisor", "slurm", "hybrid"
-platformType: ""
+# ── Network discovery ─────────────────────────────────────────────────────────
+networkScan:
+  # Scanning a customer's network is opt-out, and turning it off must need no
+  # other configuration.
+  enabled: true
+  # The subnet the BMCs and hypervisors sit on, e.g. "10.20.0.0/24". Leave
+  # empty only if the pod's own network is the one to scan — inside Kubernetes
+  # it usually is not, and the scan would find nothing.
+  #
+  # Reaching that subnet is a separate matter: naming it does not create a
+  # route. Use hostNetwork, or have the pod network routed to the VLAN.
+  subnet: ""
 
-# ── Hypervisor config (platformType=hypervisor or hybrid) ─────────────────────
+# Seconds between two polls for assigned jobs.
+pollInterval: 15
+
+# ── Plusieurs hyperviseurs sur une passerelle ─────────────────────────────────
+# Laisser vide pour n'en declarer qu'un, avec les blocs proxmox/xenOrchestra/
+# vsphere ci-dessous. Avec une liste, chaque entree doit porter un nom distinct :
+# c'est la cle que visent les regles d'alerte et la tarification.
+#
+# hypervisors:
+#   - type: proxmox
+#     name: pve-paris
+#     url: https://pve.paris.local:8006
+#     user: root@pam
+#     token_id: vibops
+#     token: ""
+#   - type: vsphere
+#     name: vc-lyon
+#     url: vcenter.lyon.local
+#     user: svc@vsphere.local
+#     token: ""
+hypervisors: []
+
+# ── vSphere (un seul) ─────────────────────────────────────────────────────────
+vsphere:
+  host: ""          # vcenter.example.com, sans https://
+  username: ""
+  password: ""
+
+# ── Hypervisor ────────────────────────────────────────────────────────────────
+# Detecte par la presence d'une URL : pas de platformType a poser.
 # Proxmox VE
 proxmox:
   url: ""          # https://proxmox.example.com:8006
@@ -61,7 +105,7 @@ vsphere:
   password: ""
   verifySsl: "false"
 
-# ── Slurm config (platformType=slurm or hybrid) ──────────────────────────────
+# ── Slurm ─────────────────────────────────────────────────────────────────────
 slurm:
   host: ""           # Slurm head node hostname
   sshUser: "root"
