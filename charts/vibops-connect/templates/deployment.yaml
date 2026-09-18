@@ -48,6 +48,10 @@ spec:
             - name: VIBOPS_NETWORK_SCAN_SUBNET
               value: {{ .Values.networkScan.subnet | quote }}
             {{- end }}
+            {{- if .Values.networkScan.timeoutMs }}
+            - name: VIBOPS_NETWORK_SCAN_TIMEOUT
+              value: {{ .Values.networkScan.timeoutMs | quote }}
+            {{- end }}
             {{- else }}
             - name: VIBOPS_NETWORK_SCAN
               value: "false"
@@ -75,6 +79,10 @@ spec:
               value: {{ .Values.vsphere.username | quote }}
             - name: VSPHERE_PASSWORD
               value: {{ .Values.vsphere.password | quote }}
+            {{- if .Values.vsphere.port }}
+            - name: VSPHERE_PORT
+              value: {{ .Values.vsphere.port | quote }}
+            {{- end }}
             {{- end }}
             {{- if .Values.proxmox.url }}
             - name: PROXMOX_URL
