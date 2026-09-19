@@ -148,7 +148,7 @@ bash install.sh --domain vibops.example.com --llm-key sk-ant-xxx
 | Option | Default | Purpose |
 |---|---|---|
 | `--domain` | *(none)* | Domain for the reverse proxy. **Enables automatic HTTPS** — see below |
-| `--version` | latest release | Image tag to deploy, e.g. `v0.41.5` |
+| `--version` | latest release | Image tag to deploy, e.g. `v0.45.0` |
 | `--llm-key` | *(none)* | LLM provider API key. Can also be set later in `.env` |
 | `--llm-model` | `claude-sonnet-5` | Model name, interpreted by the active provider |
 | `--llm-provider` | `claude` | `claude`, `openai`, `ollama` or `nemotron` |
@@ -293,13 +293,22 @@ Log in at **http://localhost:8003** (or **http://SERVER_IP:8003** on a remote se
 
 Recommended for: CSP client deployments, enterprise on-prem, any production workload.
 
-#### Step 1 — Add Helm dependencies
+#### Step 1 — Fetch the chart
+
+There is **no public Helm repository yet**: `charts.vibops.io` does not resolve,
+and GitHub Pages is not enabled on the repository. The chart ships as a GitHub
+release asset, so download it rather than adding a repo.
 
 ```bash
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo add vibops  https://charts.vibops.io
+helm repo add bitnami https://charts.bitnami.com/bitnami   # PostgreSQL/Redis dependencies
 helm repo update
+
+gh release download v0.45.0 \
+  --repo davidmacamara-boop/vibops --pattern 'vibops-*.tgz'
 ```
+
+Wherever the steps below say `vibops/vibops`, use the downloaded `.tgz` path
+instead.
 
 #### Step 2 — Prepare your values file
 
@@ -534,7 +543,10 @@ kubectl create secret generic vibops-connect-token \
 # GATEWAY_ID : l'UUID rendu avec le token a la creation de la passerelle.
 # Prometheus et le noeud Slurm se saisissent sur la passerelle dans la
 # console, pas ici — le chart ne les rend dans aucun template.
-helm upgrade --install vibops-connect vibops/vibops-connect \
+# Le chart Connect est lui aussi une release GitHub :
+#   gh release download vibops-connect-0.27.1 \
+#     --repo davidmacamara-boop/vibops --pattern '*.tgz'
+helm upgrade --install vibops-connect ./vibops-connect-0.27.1.tgz \
   --namespace vibops-connect \
   --set gateway.id="$GATEWAY_ID" \
   --set vibops.coreUrl="https://vibops.mycompany.com" \
